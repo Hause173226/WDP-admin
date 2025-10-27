@@ -1,28 +1,76 @@
 export interface User {
-  id: string;
-  name: string;
+  _id: string;
+  fullName: string;
   email: string;
-  role: 'buyer' | 'seller' | 'both';
-  status: 'active' | 'pending' | 'blocked';
+  phone: string;
+  role: "user" | "admin" | "staff";
+  status: "ACTIVE" | "SUSPENDED" | "DELETED";
   avatar?: string;
   createdAt: string;
-  transactionCount: number;
+  updatedAt: string;
+  emailVerified: boolean;
+  stats?: {
+    soldCount: number;
+    buyCount: number;
+    cancelRate: number;
+    responseTime: number;
+    completionRate: number;
+  };
+  refreshToken?: string;
+  roles?: string;
+  address?: {
+    fullAddress: string;
+    ward: string;
+    district: string;
+    city: string;
+    province: string;
+    isActive: boolean;
+    _id: string;
+    createdAt: string;
+    updatedAt: string;
+  };
+  dateOfBirth?: string;
+  gender?: "male" | "female" | "other";
+}
+
+export interface Media {
+  url: string;
+  kind: "photo" | "doc";
 }
 
 export interface Listing {
-  id: string;
-  title: string;
-  type: 'vehicle' | 'battery';
-  price: number;
-  seller: {
-    id: string;
-    name: string;
+  _id: string;
+  sellerId: string;
+  type: "Car" | "Battery";
+  make?: string;
+  model?: string;
+  year?: number;
+  batteryCapacityKWh?: number;
+  mileageKm?: number;
+  chargeCycles?: number;
+  condition: "New" | "LikeNew" | "Used" | "Worn";
+  photos: Media[];
+  documents: Media[];
+  location: {
+    city?: string;
+    district?: string;
+    address?: string;
   };
-  status: 'pending' | 'approved' | 'rejected' | 'spam';
-  isCertified: boolean;
-  images: string[];
-  description: string;
+  priceListed: number;
+  tradeMethod: "meet" | "ship" | "consignment";
+  status:
+    | "Draft"
+    | "PendingReview"
+    | "Published"
+    | "InTransaction"
+    | "Sold"
+    | "Expired"
+    | "Rejected";
+  notes?: string;
+  rejectReason?: string;
+  publishedAt?: string;
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface Transaction {
@@ -40,7 +88,7 @@ export interface Transaction {
     name: string;
   };
   amount: number;
-  status: 'created' | 'paid' | 'shipping' | 'completed' | 'disputed';
+  status: "created" | "paid" | "shipping" | "completed" | "disputed";
   createdAt: string;
   timeline: {
     status: string;
