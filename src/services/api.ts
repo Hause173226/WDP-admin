@@ -105,9 +105,23 @@ export const listingsService = {
 
 // Users API
 export const usersService = {
+  // Get all users
+  getAllUsers: async () => {
+    const response = await fetch(`${API_BASE_URL}/users`, {
+      method: "GET",
+      headers: getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return response.json();
+  },
+
   // Get user by ID
   getUserById: async (userId: string) => {
-    const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
+    const response = await fetch(`${API_BASE_URL}/api/users/${userId}`, {
       method: "GET",
       headers: getAuthHeaders(),
     });
@@ -121,7 +135,7 @@ export const usersService = {
 
   // Sign out
   signOut: async () => {
-    const response = await fetch(`${API_BASE_URL}/users/signout`, {
+    const response = await fetch(`${API_BASE_URL}/api/users/signout`, {
       method: "POST",
       headers: {
         accept: "*/*",
@@ -139,7 +153,7 @@ export const usersService = {
 
   // Update user status
   updateUserStatus: async (userId: string, status: string) => {
-    const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
+    const response = await fetch(`${API_BASE_URL}/api/users/${userId}`, {
       method: "PUT",
       headers: getAuthHeadersWithContentType(),
       body: JSON.stringify({ status }),
