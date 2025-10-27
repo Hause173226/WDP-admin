@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+/* eslint-disable @typescript-eslint/no-unused-vars */
+import { useState, useEffect, memo, useCallback, useRef } from "react";
 import Layout from "../components/Layout";
 import { Search, Eye, CheckCircle, XCircle, RefreshCw } from "lucide-react";
 import { Listing } from "../types";
@@ -17,6 +18,12 @@ export default function Listings() {
   const [users, setUsers] = useState<{
     [key: string]: { fullName: string; email: string };
   }>({});
+
+  // Ref để track API calls (compatible với StrictMode)
+  const fetchingUsersRef = useRef<Set<string>>(new Set());
+  const apiCallsRef = useRef<
+    Map<string, Promise<{ fullName: string; email: string }>>
+  >(new Map());
 
   useEffect(() => {
     fetchListings();
@@ -112,76 +119,103 @@ export default function Listings() {
     return "N/A";
   };
 
-  const SellerInfo = ({
-    sellerId,
-  }: {
-    sellerId: string | object | undefined;
-  }) => {
-    const [userInfo, setUserInfo] = useState<{
-      fullName: string;
-      email: string;
-    } | null>(null);
-    const [loading, setLoading] = useState(false);
+  // Memoized SellerInfo component để tránh re-render không cần thiết
+  const SellerInfo = memo(
+    ({ sellerId }: { sellerId: string | object | undefined }) => {
+      const userId = formatSellerId(sellerId);
 
-    useEffect(() => {
-      const loadUserInfo = async () => {
-        const userId = formatSellerId(sellerId);
-        if (userId === "N/A") {
-          setUserInfo({ fullName: "N/A", email: "N/A" });
-          return;
+      // Sử dụng global cache trực tiếp thay vì local state
+      const userInfo = users[userId];
+      const isLoading = fetchingUsersRef.current.has(userId);
+
+      useEffect(() => {
+        const loadUserInfo = async () => {
+          if (userId === "N/A") {
+            return;
+          }
+
+          if (users[userId]) {
+            return;
+          }
+
+          // Tránh duplicate calls - kiểm tra global cache
+          if (fetchingUsersRef.current.has(userId)) {
+            return;
+          }
+
+          try {
+            await fetchUserInfo(userId);
+          } catch (error) {
+            console.error("Error loading user info:", error);
+          }
+        };
+
+        loadUserInfo();
+      }, [userId]);
+
+      if (isLoading) {
+        return <span className="text-gray-400">Đang tải...</span>;
+      }
+
+      return (
+        <div>
+          <div className="font-medium">{userInfo?.fullName || "N/A"}</div>
+          <div className="text-xs text-gray-500">{userInfo?.email || ""}</div>
+        </div>
+      );
+    }
+  );
+
+  const fetchUserInfo = useCallback(
+    async (userId: string) => {
+      // Kiểm tra cache trước
+      if (users[userId]) {
+        console.log(`✅ Cache hit for: ${userId}`);
+        return users[userId];
+      }
+
+      // Kiểm tra xem đã có request đang chạy chưa (sử dụng ref)
+      if (fetchingUsersRef.current.has(userId)) {
+        // Trả về promise đang chạy
+        return (
+          apiCallsRef.current.get(userId) ||
+          Promise.resolve({ fullName: "N/A", email: "N/A" })
+        );
+      }
+
+      // Tạo promise cho API call
+      const apiPromise = (async () => {
+        try {
+          const userData = await usersService.getUserById(userId);
+          const userInfo = {
+            fullName: userData.fullName || "N/A",
+            email: userData.email || "N/A",
+          };
+          setUsers((prev) => ({ ...prev, [userId]: userInfo }));
+
+          return userInfo;
+        } catch (error) {
+          return { fullName: "N/A", email: "N/A" };
+        } finally {
+          // Xóa khỏi refs
+          fetchingUsersRef.current.delete(userId);
+          apiCallsRef.current.delete(userId);
         }
+      })();
 
-        if (users[userId]) {
-          setUserInfo(users[userId]);
-          return;
-        }
+      // Lưu promise vào ref
+      apiCallsRef.current.set(userId, apiPromise);
+      fetchingUsersRef.current.add(userId);
 
-        setLoading(true);
-        const info = await fetchUserInfo(userId);
-        setUserInfo(info);
-        setLoading(false);
-      };
-
-      loadUserInfo();
-    }, [sellerId]);
-
-    if (loading) {
-      return <span className="text-gray-400">Đang tải...</span>;
-    }
-
-    return (
-      <div>
-        <div className="font-medium">{userInfo?.fullName || "N/A"}</div>
-        <div className="text-xs text-gray-500">{userInfo?.email || ""}</div>
-      </div>
-    );
-  };
-
-  const fetchUserInfo = async (userId: string) => {
-    if (users[userId]) {
-      return users[userId];
-    }
-
-    try {
-      const userData = await usersService.getUserById(userId);
-      const userInfo = {
-        fullName: userData.fullName || "N/A",
-        email: userData.email || "N/A",
-      };
-      setUsers((prev) => ({ ...prev, [userId]: userInfo }));
-      return userInfo;
-    } catch (error) {
-      console.error("Error fetching user info:", error);
-    }
-
-    return { fullName: "N/A", email: "N/A" };
-  };
+      return apiPromise;
+    },
+    [users]
+  );
 
   const approveListing = async (listingId: string) => {
     setActionLoading(listingId);
     try {
       const data = await listingsService.approveListing(listingId);
-      console.log("Listing approved:", data.message);
 
       // Cập nhật local state
       setListings(

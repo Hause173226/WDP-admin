@@ -120,7 +120,7 @@ export const usersService = {
 
   // Get user by ID
   getUserById: async (userId: string) => {
-    const response = await fetch(`${API_BASE_URL}/api/users/${userId}`, {
+    const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
       method: "GET",
       headers: getAuthHeaders(),
     });
@@ -129,7 +129,9 @@ export const usersService = {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    return response.json();
+    const data = await response.json();
+
+    return data;
   },
 
   // Sign out
