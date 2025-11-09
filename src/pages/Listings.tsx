@@ -217,9 +217,9 @@ export default function Listings() {
     try {
       await listingsService.approveListing(listingId);
 
-      // Cập nhật local state
-      setListings(
-        listings.map((listing) =>
+      // Cập nhật local state (sử dụng functional update để tránh stale state)
+      setListings((prev) =>
+        prev.map((listing) =>
           listing._id === listingId
             ? { ...listing, status: "Published" as const }
             : listing
