@@ -1,6 +1,3 @@
-/* =========================
- * User (giữ nguyên, không đổi cấu trúc)
- * ========================= */
 export interface User {
   _id: string;
   fullName: string;
@@ -36,103 +33,152 @@ export interface User {
   gender?: "male" | "female" | "other";
 }
 
-/* =========================
- * Media (bổ sung publicId & metadata Cloudinary)
- * ========================= */
 export interface Media {
   url: string;
   kind: "photo" | "doc";
-  publicId?: string;   // Cloudinary public_id
-  width?: number;
-  height?: number;
-  format?: string;     // jpg/png/webp...
 }
-
-/* =========================
- * Listing (mở rộng để khớp backend)
- * ========================= */
-export type ListingStatus =
-  | "Draft"
-  | "PendingReview"
-  | "Published"
-  | "InTransaction"
-  | "Sold"
-  | "Expired"
-  | "Rejected";
-
-export type TradeMethod = "meet" | "ship" | "consignment";
-export type ConditionType = "New" | "LikeNew" | "Used" | "Worn";
-
-/** Seller thu gọn khi populate từ BE (searchListings/populate) */
-export interface SellerRef {
-  _id: string;
-  fullName?: string;
-  email?: string;   // <— bổ sung để FE không phải fetch user riêng
-  phone?: string;
-  avatar?: string;
-}
-export type SellerId = string | SellerRef; // <— alias tiện dùng
 
 export interface Listing {
   _id: string;
-  /** BE có thể populate -> union để FE không vỡ */
-  sellerId: SellerId;
-
+  sellerId: string;
   type: "Car" | "Battery";
-
-  // Chung
   make?: string;
   model?: string;
   year?: number;
-  /** optional để khớp BE (BaseListing.condition?) */
-  condition?: ConditionType;
-  mileageKm?: number;
-
-  // Battery-only
   batteryCapacityKWh?: number;
+  mileageKm?: number;
   chargeCycles?: number;
-
-  // Car-only (theo mẫu hợp đồng – đều optional để không phá UI cũ)
-  licensePlate?: string;             // Biển số
-  engineDisplacementCc?: number;     // Dung tích xi-lanh (cc)
-  vehicleType?: string;              // Sedan/SUV/...
-  paintColor?: string;               // Màu sơn
-  engineNumber?: string;             // Số máy
-  chassisNumber?: string;            // Số khung
-  otherFeatures?: string;            // Đặc điểm khác
-
+  condition: "New" | "LikeNew" | "Used" | "Worn";
   photos: Media[];
-  documents?: Media[];               // optional
-  location?: {
+  documents: Media[];
+  location: {
     city?: string;
     district?: string;
     address?: string;
   };
-
   priceListed: number;
-  tradeMethod: TradeMethod;
-
-  status: ListingStatus;
+  tradeMethod: "meet" | "ship" | "consignment";
+  status:
+    | "Draft"
+    | "PendingReview"
+    | "Published"
+    | "InTransaction"
+    | "Sold"
+    | "Expired"
+    | "Rejected";
   notes?: string;
   rejectReason?: string;
-  publishedAt?: string;              // ISO
-
+  publishedAt?: string;
   createdAt: string;
   updatedAt: string;
+  // Additional fields for Car type
+  licensePlate?: string;
+  engineDisplacementCc?: number;
+  vehicleType?: string;
+  paintColor?: string;
+  engineNumber?: string;
+  chassisNumber?: string;
+  otherFeatures?: string;
 }
 
-/* =========================
- * Transaction / Fee / Stats (giữ nguyên)
- * ========================= */
 export interface Transaction {
   id: string;
-  buyer: { id: string; name: string };
-  seller: { id: string; name: string };
-  product: { id: string; name: string };
-  amount: number;
-  status: "created" | "paid" | "shipping" | "completed" | "disputed";
-  createdAt: string;
-  timeline: { status: string; date: string; completed: boolean }[];
+  type: "buyer" | "seller";
+  status: "PENDING" | "CONFIRMED" | "CANCELLED" | "REJECTED" | "COMPLETED";
+  listing: {
+    id: string;
+    title: string;
+    make?: string;
+    model?: string;
+    year?: number;
+    priceListed: number;
+    images: string[];
+  };
+  depositRequest: {
+    id: string;
+    depositAmount: number;
+    status:
+      | "PENDING_SELLER_CONFIRMATION"
+      | "IN_ESCROW"
+      | "CANCELLED"
+      | "UNKNOWN";
+  };
+  counterparty: {
+    id: string;
+    name: string;
+    email: string;
+    phone: string;
+  };
+  dates: {
+    createdAt: string;
+    scheduledDate: string;
+    cancelledAt?: string;
+    completedAt?: string;
+  };
+  amount: {
+    deposit: number;
+    total: number;
+  };
+  appointmentId: string;
+  contract?: {
+    id: string;
+    status: string;
+    contractNumber: string;
+    photos: {
+      url: string;
+      publicId: string;
+      uploadedAt: string;
+    }[];
+    signedAt: string;
+    completedAt?: string;
+  };
+}
+
+export interface TransactionsResponse {
+  success: boolean;
+  data: Transaction[];
+  pagination: {
+    current: number;
+    pages: number;
+    total: number;
+    limit: number;
+  };
+}
+
+export interface TransactionDetailResponse {
+  success: boolean;
+  data: {
+    appointment?: {
+      _id: string;
+      auctionId?: string;
+      appointmentType?: string;
+      buyerId?: {
+        _id: string;
+        fullName: string;
+        phone: string;
+        email: string;
+      };
+      sellerId?: {
+        _id: string;
+        fullName: string;
+        phone: string;
+        email: string;
+      };
+      scheduledDate: string;
+      status: string;
+      type?: string;
+      location?: string;
+      notes?: string;
+      buyerConfirmed?: boolean;
+      sellerConfirmed?: boolean;
+      createdAt: string;
+      updatedAt: string;
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    contract?: any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    listing?: any;
+  };
 }
 
 export interface FeeConfig {
@@ -149,79 +195,4 @@ export interface Stats {
   revenue: number;
   completedTransactions: number;
   certifiedListings: number;
-}
-
-/* =========
- * (Tuỳ chọn) Type guards để admin render theo loại
- * ========= */
-export const isCar = (l: Listing): l is Listing & { type: "Car" } => l?.type === "Car";
-export const isBattery = (l: Listing): l is Listing & { type: "Battery" } => l?.type === "Battery";
-
-/** (tiện) Kiểm tra seller đã populate chưa */
-export const isSellerPopulated = (s: SellerId): s is SellerRef =>
-  !!s && typeof s !== "string";
-
-/* =========================
- * (Khuyến nghị) Sort/Filter/Pagination cho trang Admin
- * ========================= */
-export type SortBy = "newest" | "oldest" | "price_low" | "price_high" | "reputation";
-
-export interface ListingFilter {
-  keyword?: string;
-  type?: "Car" | "Battery";
-  make?: string;
-  model?: string;
-  year?: number;
-  batteryCapacityKWh?: number;
-  mileageKm?: number;         // max mileage
-  minPrice?: number;
-  maxPrice?: number;
-  city?: string;
-  district?: string;
-  condition?: ConditionType;
-  sortBy?: SortBy;
-  page?: number;
-  limit?: number;
-}
-
-export interface PaginationMeta {
-  currentPage: number;
-  totalPages: number;
-  totalCount: number;
-  hasNextPage: boolean;
-  hasPrevPage: boolean;
-  limit: number;
-}
-
-export interface Paginated<T> {
-  data: T[];
-  pagination: PaginationMeta;
-}
-
-/** Map đúng response từ BE public searchListings */
-export interface SearchListingsResponse {
-  listings: Listing[];
-  pagination: PaginationMeta;
-  filters: Partial<ListingFilter>;
-}
-
-/* =========================
- * (Admin) Actions & response types
- * ========================= */
-export type AdminAction =
-  | "approve"          // -> Published
-  | "reject"           // -> Rejected (kèm rejectReason)
-  | "markInTransaction"// -> InTransaction
-  | "markSold"         // -> Sold
-  | "expire"           // -> Expired
-  | "revertToDraft";   // -> Draft
-
-export interface RejectPayload {
-  reason: string;
-}
-
-/** Map đúng response từ BE admin list: GET /api/admin/listings */
-export interface AdminListingsResponse {
-  listings: Listing[];
-  pagination: PaginationMeta;
 }
