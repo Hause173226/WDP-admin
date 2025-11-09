@@ -75,26 +75,96 @@ export interface Listing {
 
 export interface Transaction {
   id: string;
-  buyer: {
+  type: "buyer" | "seller";
+  status: "PENDING" | "CONFIRMED" | "CANCELLED" | "REJECTED" | "COMPLETED";
+  listing: {
+    id: string;
+    title: string;
+    make?: string;
+    model?: string;
+    year?: number;
+    priceListed: number;
+    images: string[];
+  };
+  depositRequest: {
+    id: string;
+    depositAmount: number;
+    status: "PENDING_SELLER_CONFIRMATION" | "IN_ESCROW" | "CANCELLED" | "UNKNOWN";
+  };
+  counterparty: {
     id: string;
     name: string;
+    email: string;
+    phone: string;
   };
-  seller: {
+  dates: {
+    createdAt: string;
+    scheduledDate: string;
+    cancelledAt?: string;
+    completedAt?: string;
+  };
+  amount: {
+    deposit: number;
+    total: number;
+  };
+  appointmentId: string;
+  contract?: {
     id: string;
-    name: string;
-  };
-  product: {
-    id: string;
-    name: string;
-  };
-  amount: number;
-  status: "created" | "paid" | "shipping" | "completed" | "disputed";
-  createdAt: string;
-  timeline: {
     status: string;
-    date: string;
-    completed: boolean;
-  }[];
+    contractNumber: string;
+    photos: {
+      url: string;
+      publicId: string;
+      uploadedAt: string;
+    }[];
+    signedAt: string;
+    completedAt?: string;
+  };
+}
+
+export interface TransactionsResponse {
+  success: boolean;
+  data: Transaction[];
+  pagination: {
+    current: number;
+    pages: number;
+    total: number;
+    limit: number;
+  };
+}
+
+export interface TransactionDetailResponse {
+  success: boolean;
+  data: {
+    appointment?: {
+      _id: string;
+      auctionId?: string;
+      appointmentType?: string;
+      buyerId?: {
+        _id: string;
+        fullName: string;
+        phone: string;
+        email: string;
+      };
+      sellerId?: {
+        _id: string;
+        fullName: string;
+        phone: string;
+        email: string;
+      };
+      scheduledDate: string;
+      status: string;
+      type?: string;
+      location?: string;
+      notes?: string;
+      buyerConfirmed?: boolean;
+      sellerConfirmed?: boolean;
+      createdAt: string;
+      updatedAt: string;
+    };
+    contract?: any;
+    listing?: any;
+  };
 }
 
 export interface FeeConfig {

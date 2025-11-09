@@ -215,5 +215,52 @@ export const authService = {
   },
 };
 
+// Transactions API
+export const transactionsService = {
+  // Get all transactions
+  getAllTransactions: async (page: number = 1, limit: number = 20) => {
+    const timestamp = new Date().getTime();
+    // Normalize base URL - remove trailing slash and check if /api is already included
+    const normalizedBase = API_BASE_URL.replace(/\/$/, ''); // Remove trailing slash
+    const baseUrl = normalizedBase.endsWith('/api') 
+      ? normalizedBase 
+      : `${normalizedBase}/api`;
+    const response = await fetch(
+      `${baseUrl}/transactions/all?page=${page}&limit=${limit}&_t=${timestamp}`,
+      {
+        method: "GET",
+        headers: getAuthHeaders(),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return response.json();
+  },
+
+  // Get transaction detail by appointmentId
+  getTransactionDetail: async (appointmentId: string) => {
+    const normalizedBase = API_BASE_URL.replace(/\/$/, '');
+    const baseUrl = normalizedBase.endsWith('/api') 
+      ? normalizedBase 
+      : `${normalizedBase}/api`;
+    const response = await fetch(
+      `${baseUrl}/transactions/${appointmentId}`,
+      {
+        method: "GET",
+        headers: getAuthHeaders(),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return response.json();
+  },
+};
+
 // Export the base URL for reference
 export { API_BASE_URL };
