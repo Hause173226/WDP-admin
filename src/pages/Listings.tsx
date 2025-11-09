@@ -193,7 +193,17 @@ export default function Listings() {
     setActionLoading(listingId);
     try {
       await listingsService.approveListing(listingId);
-      setListings((prev) => prev.map((l) => (l._id === listingId ? { ...l, status: "Published" } : l)));
+
+      // Cập nhật local state (sử dụng functional update để tránh stale state)
+      setListings((prev) =>
+        prev.map((listing) =>
+          listing._id === listingId
+            ? { ...listing, status: "Published" as const }
+            : listing
+        )
+      );
+
+      // Đóng modal
       setSelectedListing(null);
       fetchListings(filter);
     } catch (err) {
