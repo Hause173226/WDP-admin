@@ -100,6 +100,40 @@ export const listingsService = {
 
     return response.json();
   },
+
+  // Get admin listings with status filter
+  getAdminListings: async (params: { status?: string }) => {
+    const timestamp = new Date().getTime();
+    const normalizedBase = API_BASE_URL.replace(/\/$/, "");
+    const baseUrl = normalizedBase.endsWith("/api")
+      ? normalizedBase
+      : `${normalizedBase}/api`;
+
+    let url = `${baseUrl}/admin/listings`;
+    const queryParams = new URLSearchParams();
+
+    if (params.status) {
+      if (params.status === "PendingReview") {
+        url = `${baseUrl}/admin/listings/pending`;
+      } else {
+        queryParams.append("status", params.status);
+      }
+    }
+
+    queryParams.append("_t", timestamp.toString());
+    url += `?${queryParams.toString()}`;
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return response.json();
+  },
 };
 
 // Users API
@@ -221,9 +255,9 @@ export const transactionsService = {
   getAllTransactions: async (page: number = 1, limit: number = 20) => {
     const timestamp = new Date().getTime();
     // Normalize base URL - remove trailing slash and check if /api is already included
-    const normalizedBase = API_BASE_URL.replace(/\/$/, ''); // Remove trailing slash
-    const baseUrl = normalizedBase.endsWith('/api') 
-      ? normalizedBase 
+    const normalizedBase = API_BASE_URL.replace(/\/$/, ""); // Remove trailing slash
+    const baseUrl = normalizedBase.endsWith("/api")
+      ? normalizedBase
       : `${normalizedBase}/api`;
     const response = await fetch(
       `${baseUrl}/transactions/all?page=${page}&limit=${limit}&_t=${timestamp}`,
@@ -242,17 +276,14 @@ export const transactionsService = {
 
   // Get transaction detail by appointmentId
   getTransactionDetail: async (appointmentId: string) => {
-    const normalizedBase = API_BASE_URL.replace(/\/$/, '');
-    const baseUrl = normalizedBase.endsWith('/api') 
-      ? normalizedBase 
+    const normalizedBase = API_BASE_URL.replace(/\/$/, "");
+    const baseUrl = normalizedBase.endsWith("/api")
+      ? normalizedBase
       : `${normalizedBase}/api`;
-    const response = await fetch(
-      `${baseUrl}/transactions/${appointmentId}`,
-      {
-        method: "GET",
-        headers: getAuthHeaders(),
-      }
-    );
+    const response = await fetch(`${baseUrl}/transactions/${appointmentId}`, {
+      method: "GET",
+      headers: getAuthHeaders(),
+    });
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
