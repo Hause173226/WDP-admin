@@ -71,6 +71,14 @@ export interface Listing {
   publishedAt?: string;
   createdAt: string;
   updatedAt: string;
+  // Additional fields for Car type
+  licensePlate?: string;
+  engineDisplacementCc?: number;
+  vehicleType?: string;
+  paintColor?: string;
+  engineNumber?: string;
+  chassisNumber?: string;
+  otherFeatures?: string;
 }
 
 export interface Transaction {
