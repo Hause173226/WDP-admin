@@ -89,7 +89,11 @@ export interface Transaction {
   depositRequest: {
     id: string;
     depositAmount: number;
-    status: "PENDING_SELLER_CONFIRMATION" | "IN_ESCROW" | "CANCELLED" | "UNKNOWN";
+    status:
+      | "PENDING_SELLER_CONFIRMATION"
+      | "IN_ESCROW"
+      | "CANCELLED"
+      | "UNKNOWN";
   };
   counterparty: {
     id: string;
@@ -162,7 +166,9 @@ export interface TransactionDetailResponse {
       createdAt: string;
       updatedAt: string;
     };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     contract?: any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     listing?: any;
   };
 }

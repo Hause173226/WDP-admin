@@ -215,7 +215,7 @@ export default function Listings() {
   const approveListing = async (listingId: string) => {
     setActionLoading(listingId);
     try {
-      const data = await listingsService.approveListing(listingId);
+      await listingsService.approveListing(listingId);
 
       // Cập nhật local state
       setListings(
