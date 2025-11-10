@@ -318,10 +318,14 @@ export default function Reports() {
   // Calculate stats from real data
   const totalUsers = users.length;
   const totalListings = listings.length;
-  const totalRevenue = systemWallet?.totalEarned || 0;
   const completedTransactions = allTransactions.filter(
     (t) => t.status === "COMPLETED"
   );
+  // Calculate total revenue from completed transactions to match chart data
+  const totalRevenue = completedTransactions.reduce(
+    (sum, t) => sum + t.amount.total,
+    0
+  ) || systemWallet?.totalEarned || 0;
   const totalCompletedTransactions = completedTransactions.length;
   const certifiedListings = listings.filter(
     (l) => l.status === "Published"
