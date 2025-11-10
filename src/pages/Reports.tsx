@@ -22,11 +22,19 @@ export default function Reports() {
   const [listings, setListings] = useState<Listing[]>([]);
   const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
   const [systemWallet, setSystemWallet] = useState<SystemWallet | null>(null);
+  const [systemWalletTransactions, setSystemWalletTransactions] = useState<
+    Transaction[]
+  >([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchReportsData();
+    fetchSystemWalletTransactions();
   }, []);
+
+  useEffect(() => {
+    fetchSystemWalletTransactions();
+  }, [timeFilter]);
 
   const fetchReportsData = async () => {
     try {
@@ -71,6 +79,22 @@ export default function Reports() {
       );
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchSystemWalletTransactions = async () => {
+    try {
+      // Fetch all system wallet transactions for chart
+      // Use a large limit to get all transactions
+      const response = await systemWalletService.getSystemWalletTransactions(
+        1,
+        1000
+      );
+      if (response.success && response.data) {
+        setSystemWalletTransactions(response.data);
+      }
+    } catch (err) {
+      console.error("Error fetching system wallet transactions:", err);
     }
   };
 
@@ -318,14 +342,10 @@ export default function Reports() {
   // Calculate stats from real data
   const totalUsers = users.length;
   const totalListings = listings.length;
+  const totalRevenue = systemWallet?.totalEarned || 0;
   const completedTransactions = allTransactions.filter(
     (t) => t.status === "COMPLETED"
   );
-  // Calculate total revenue from completed transactions to match chart data
-  const totalRevenue = completedTransactions.reduce(
-    (sum, t) => sum + t.amount.total,
-    0
-  ) || systemWallet?.totalEarned || 0;
   const totalCompletedTransactions = completedTransactions.length;
   const certifiedListings = listings.filter(
     (l) => l.status === "Published"
@@ -374,10 +394,9 @@ export default function Reports() {
 
   const transactionStats = calculateTransactionStats();
 
-  // Calculate revenue data from completed transactions
+  // Calculate revenue data from system wallet transactions
   const revenueData = useMemo(() => {
-    const completed = allTransactions.filter((t) => t.status === "COMPLETED");
-    if (completed.length === 0) {
+    if (systemWalletTransactions.length === 0) {
       return [];
     }
 
@@ -433,7 +452,8 @@ export default function Reports() {
       revenueMap.set(key, 0);
     }
 
-    completed.forEach((transaction) => {
+    // Calculate revenue from system wallet transactions
+    systemWalletTransactions.forEach((transaction) => {
       const transactionDate = new Date(
         transaction.dates.completedAt || transaction.dates.createdAt
       );
@@ -453,7 +473,8 @@ export default function Reports() {
         }
 
         const currentRevenue = revenueMap.get(key) || 0;
-        revenueMap.set(key, currentRevenue + transaction.amount.total);
+        // Use amount.total from system wallet transaction
+        revenueMap.set(key, currentRevenue + (transaction.amount?.total || 0));
       }
     });
 
@@ -463,7 +484,7 @@ export default function Reports() {
         revenue,
       }))
       .sort((a, b) => a.date.localeCompare(b.date));
-  }, [allTransactions, timeFilter]);
+  }, [systemWalletTransactions, timeFilter]);
 
   // Get latest transactions (sorted by date, latest first)
   const latestTransactions = useMemo(() => {

@@ -215,3 +215,13 @@ export interface SystemWalletResponse {
   success: boolean;
   data: SystemWallet;
 }
+
+export interface SystemWalletChartData {
+  date: string;
+  revenue: number;
+}
+
+export interface SystemWalletChartResponse {
+  success: boolean;
+  data: SystemWalletChartData[];
+}
