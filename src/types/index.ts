@@ -196,3 +196,22 @@ export interface Stats {
   completedTransactions: number;
   certifiedListings: number;
 }
+
+export interface SystemWallet {
+  id: string;
+  balance: number;
+  totalEarned: number;
+  totalTransactions: number;
+  lastTransactionAt: string;
+  createdAt: string;
+  updatedAt: string;
+  stats: {
+    totalRevenue: number;
+    totalFees: number;
+  };
+}
+
+export interface SystemWalletResponse {
+  success: boolean;
+  data: SystemWallet;
+}

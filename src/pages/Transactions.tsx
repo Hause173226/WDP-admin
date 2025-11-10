@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import Layout from "../components/Layout";
-import { Eye, Download, AlertCircle, RefreshCw } from "lucide-react";
+import { Eye, Download, AlertCircle, RefreshCw, Filter } from "lucide-react";
 import {
   Transaction,
   TransactionsResponse,
@@ -10,6 +10,7 @@ import { transactionsService } from "../services/api";
 
 export default function Transactions() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
   const [selectedTransaction, setSelectedTransaction] =
     useState<Transaction | null>(null);
   const [transactionDetail, setTransactionDetail] = useState<
@@ -22,6 +23,7 @@ export default function Transactions() {
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [pagination, setPagination] = useState({
     current: 1,
     pages: 1,
@@ -48,6 +50,7 @@ export default function Transactions() {
         setError(null);
         const response: TransactionsResponse =
           await transactionsService.getAllTransactions(page, 8);
+
         setTransactions(response.data);
         setPagination(response.pagination);
         setHasLoadedOnce(true);
@@ -72,18 +75,22 @@ export default function Transactions() {
       // Fetch trang đầu với limit lớn để lấy tổng số và tính stats
       const response: TransactionsResponse =
         await transactionsService.getAllTransactions(1, 1000);
-      const allTransactions = response.data;
+      const fetchedTransactions = response.data;
       const total = response.pagination.total;
+
+      // Store all transactions for client-side filtering
+      setAllTransactions(fetchedTransactions);
 
       // Nếu có nhiều hơn 1000 transactions, chỉ tính từ sample
       // Hoặc có thể fetch thêm các trang nếu cần chính xác 100%
       // Ở đây tôi sẽ dùng total từ pagination và tính stats từ data có được
       setStats({
         total: total,
-        completed: allTransactions.filter((t) => t.status === "COMPLETED")
+        completed: fetchedTransactions.filter((t) => t.status === "COMPLETED")
           .length,
-        pending: allTransactions.filter((t) => t.status === "PENDING").length,
-        cancelled: allTransactions.filter((t) => t.status === "CANCELLED")
+        pending: fetchedTransactions.filter((t) => t.status === "PENDING")
+          .length,
+        cancelled: fetchedTransactions.filter((t) => t.status === "CANCELLED")
           .length,
       });
     } catch (err) {
@@ -187,6 +194,28 @@ export default function Transactions() {
   const pendingTransactions = stats.pending;
   const cancelledTransactions = stats.cancelled;
 
+  // Filter transactions client-side when filter changes
+  const filteredTransactions = useMemo(() => {
+    if (statusFilter === "all") {
+      return transactions; // Use server-side paginated data when no filter
+    }
+    // Use allTransactions for client-side filtering
+    if (allTransactions.length > 0) {
+      return allTransactions.filter((t) => t.status === statusFilter);
+    }
+    // Fallback to current page transactions if allTransactions not loaded yet
+    return transactions.filter((t) => t.status === statusFilter);
+  }, [statusFilter, allTransactions, transactions]);
+
+  // Apply pagination to filtered transactions
+  const paginatedTransactions = useMemo(() => {
+    if (statusFilter === "all") {
+      return transactions; // Use server-side paginated data
+    }
+    // Client-side pagination for filtered results
+    return filteredTransactions.slice((currentPage - 1) * 8, currentPage * 8);
+  }, [statusFilter, filteredTransactions, transactions, currentPage]);
+
   if (initialLoading) {
     return (
       <Layout>
@@ -257,7 +286,25 @@ export default function Transactions() {
             <h2 className="text-lg font-semibold text-gray-900">
               Danh sách giao dịch
             </h2>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Filter size={18} className="text-gray-600" />
+                <select
+                  value={statusFilter}
+                  onChange={(e) => {
+                    setStatusFilter(e.target.value);
+                    setCurrentPage(1); // Reset to page 1 when filter changes
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="all">Tất cả trạng thái</option>
+                  <option value="COMPLETED">Hoàn thành</option>
+                  <option value="PENDING">Đang chờ</option>
+                  <option value="CONFIRMED">Đã xác nhận</option>
+                  <option value="CANCELLED">Đã hủy</option>
+                  <option value="REJECTED">Từ chối</option>
+                </select>
+              </div>
               <button
                 onClick={() => fetchTransactions(currentPage)}
                 className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors"
@@ -311,14 +358,14 @@ export default function Transactions() {
                 </tr>
               </thead>
               <tbody>
-                {transactions.length === 0 && !tableLoading ? (
+                {paginatedTransactions.length === 0 && !tableLoading ? (
                   <tr>
                     <td colSpan={8} className="py-8 text-center text-gray-500">
                       Không có giao dịch nào
                     </td>
                   </tr>
                 ) : (
-                  transactions.map((transaction) => (
+                  paginatedTransactions.map((transaction) => (
                     <tr
                       key={transaction.id}
                       className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
@@ -384,35 +431,80 @@ export default function Transactions() {
             </table>
           </div>
 
-          {pagination.pages > 1 && (
-            <div className="mt-6 flex justify-center items-center gap-2">
-              <button
-                onClick={() => {
-                  if (currentPage > 1) {
-                    setCurrentPage(currentPage - 1);
-                  }
-                }}
-                disabled={currentPage === 1}
-                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Trước
-              </button>
-              <span className="px-4 py-2 text-gray-700">
-                Trang {pagination.current} / {pagination.pages}
-              </span>
-              <button
-                onClick={() => {
-                  if (currentPage < pagination.pages) {
-                    setCurrentPage(currentPage + 1);
-                  }
-                }}
-                disabled={currentPage === pagination.pages}
-                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Sau
-              </button>
-            </div>
-          )}
+          {(() => {
+            if (statusFilter === "all") {
+              // Use server-side pagination
+              if (pagination.pages > 1) {
+                return (
+                  <div className="mt-6 flex justify-center items-center gap-2">
+                    <button
+                      onClick={() => {
+                        if (currentPage > 1) {
+                          setCurrentPage(currentPage - 1);
+                        }
+                      }}
+                      disabled={currentPage === 1}
+                      className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Trước
+                    </button>
+                    <span className="px-4 py-2 text-gray-700">
+                      Trang {pagination.current} / {pagination.pages}
+                    </span>
+                    <button
+                      onClick={() => {
+                        if (currentPage < pagination.pages) {
+                          setCurrentPage(currentPage + 1);
+                        }
+                      }}
+                      disabled={currentPage === pagination.pages}
+                      className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Sau
+                    </button>
+                  </div>
+                );
+              }
+            } else {
+              // Use client-side pagination for filtered results
+              const totalFilteredPages = Math.ceil(
+                filteredTransactions.length / 8
+              );
+              if (totalFilteredPages > 1) {
+                return (
+                  <div className="mt-6 flex justify-center items-center gap-2">
+                    <button
+                      onClick={() => {
+                        if (currentPage > 1) {
+                          setCurrentPage(currentPage - 1);
+                        }
+                      }}
+                      disabled={currentPage === 1}
+                      className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Trước
+                    </button>
+                    <span className="px-4 py-2 text-gray-700">
+                      Trang {currentPage} / {totalFilteredPages} (
+                      {filteredTransactions.length} giao dịch)
+                    </span>
+                    <button
+                      onClick={() => {
+                        if (currentPage < totalFilteredPages) {
+                          setCurrentPage(currentPage + 1);
+                        }
+                      }}
+                      disabled={currentPage === totalFilteredPages}
+                      className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Sau
+                    </button>
+                  </div>
+                );
+              }
+            }
+            return null;
+          })()}
         </div>
       </div>
 

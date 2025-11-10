@@ -1,13 +1,20 @@
-import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, FileText, Receipt, DollarSign, BarChart3 } from 'lucide-react';
+import { Link, useLocation } from "react-router-dom";
+import {
+  LayoutDashboard,
+  Users,
+  FileText,
+  Receipt,
+  DollarSign,
+  BarChart3,
+} from "lucide-react";
 
 const menuItems = [
-  { path: '/dashboard', icon: LayoutDashboard, label: 'Trang chủ' },
-  { path: '/users', icon: Users, label: 'Người dùng' },
-  { path: '/listings', icon: FileText, label: 'Tin đăng' },
-  { path: '/transactions', icon: Receipt, label: 'Giao dịch' },
-  { path: '/fees', icon: DollarSign, label: 'Phí & Hoa hồng' },
-  { path: '/reports', icon: BarChart3, label: 'Báo cáo' }
+  { path: "/dashboard", icon: LayoutDashboard, label: "Trang chủ" },
+  { path: "/users", icon: Users, label: "Người dùng" },
+  { path: "/listings", icon: FileText, label: "Tin đăng" },
+  { path: "/transactions", icon: Receipt, label: "Giao dịch" },
+  { path: "/fees", icon: DollarSign, label: "Phí " },
+  { path: "/reports", icon: BarChart3, label: "Báo cáo" },
 ];
 
 export default function Sidebar() {
@@ -39,8 +46,8 @@ export default function Sidebar() {
                   to={item.path}
                   className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
                     isActive
-                      ? 'bg-blue-50 text-blue-600 font-medium'
-                      : 'text-gray-700 hover:bg-gray-50'
+                      ? "bg-blue-50 text-blue-600 font-medium"
+                      : "text-gray-700 hover:bg-gray-50"
                   }`}
                 >
                   <Icon size={20} />
