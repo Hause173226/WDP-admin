@@ -26,8 +26,10 @@ export default function Fees() {
     async (page: number = 1) => {
       try {
         setLoading(true);
-        const response: TransactionsResponse =
-          await transactionsService.getAllTransactions(page, 20);
+        const response = await systemWalletService.getSystemWalletTransactions(
+          page,
+          20
+        );
         if (response.success) {
           setPagination(response.pagination);
           // Apply filter after setting all transactions
