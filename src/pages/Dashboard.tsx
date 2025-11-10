@@ -27,15 +27,20 @@ export default function Dashboard() {
   const [completedTransactions, setCompletedTransactions] = useState<
     Transaction[]
   >([]);
-  const [allCompletedTransactions, setAllCompletedTransactions] = useState<
+  const [systemWallet, setSystemWallet] = useState<SystemWallet | null>(null);
+  const [systemWalletTransactions, setSystemWalletTransactions] = useState<
     Transaction[]
   >([]);
-  const [systemWallet, setSystemWallet] = useState<SystemWallet | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchDashboardData();
+    fetchSystemWalletTransactions();
   }, []);
+
+  useEffect(() => {
+    fetchSystemWalletTransactions();
+  }, [timeFilter]);
 
   const fetchDashboardData = async () => {
     try {
@@ -82,7 +87,6 @@ export default function Dashboard() {
           ).getTime();
           return dateB - dateA;
         });
-        setAllCompletedTransactions(completed);
         setCompletedTransactions(completed.slice(0, 5)); // Get latest 5 for display
       }
 
@@ -96,6 +100,22 @@ export default function Dashboard() {
       );
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchSystemWalletTransactions = async () => {
+    try {
+      // Fetch all system wallet transactions for chart
+      // Use a large limit to get all transactions
+      const response = await systemWalletService.getSystemWalletTransactions(
+        1,
+        1000
+      );
+      if (response.success && response.data) {
+        setSystemWalletTransactions(response.data);
+      }
+    } catch (err) {
+      console.error("Error fetching system wallet transactions:", err);
     }
   };
 
@@ -121,9 +141,9 @@ export default function Dashboard() {
     });
   };
 
-  // Calculate revenue data from completed transactions
+  // Calculate revenue data from system wallet transactions
   const revenueData = useMemo(() => {
-    if (allCompletedTransactions.length === 0) {
+    if (systemWalletTransactions.length === 0) {
       return [];
     }
 
@@ -181,8 +201,8 @@ export default function Dashboard() {
       revenueMap.set(key, 0);
     }
 
-    // Calculate revenue from completed transactions
-    allCompletedTransactions.forEach((transaction) => {
+    // Calculate revenue from system wallet transactions
+    systemWalletTransactions.forEach((transaction) => {
       const transactionDate = new Date(
         transaction.dates.completedAt || transaction.dates.createdAt
       );
@@ -202,7 +222,8 @@ export default function Dashboard() {
         }
 
         const currentRevenue = revenueMap.get(key) || 0;
-        revenueMap.set(key, currentRevenue + transaction.amount.total);
+        // Use amount.total from system wallet transaction
+        revenueMap.set(key, currentRevenue + (transaction.amount?.total || 0));
       }
     });
 
@@ -216,16 +237,12 @@ export default function Dashboard() {
         // Sort by date string (works for day/month format)
         return a.date.localeCompare(b.date);
       });
-  }, [allCompletedTransactions, timeFilter]);
+  }, [systemWalletTransactions, timeFilter]);
 
   // Calculate stats from real data
   const totalUsers = users.length;
   const totalListings = listings.length;
-  // Calculate total revenue from completed transactions to match chart data
-  const totalRevenue =
-    allCompletedTransactions.reduce((sum, t) => sum + t.amount.total, 0) ||
-    systemWallet?.totalEarned ||
-    0;
+  const totalRevenue = systemWallet?.totalEarned || 0;
   const totalCompletedTransactions = completedTransactions.length;
 
   // Calculate listing types

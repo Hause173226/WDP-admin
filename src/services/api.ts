@@ -316,6 +316,87 @@ export const systemWalletService = {
 
     return response.json();
   },
+
+  // Get system wallet transaction history
+  getSystemWalletTransactions: async (page: number = 1, limit: number = 20) => {
+    const normalizedBase = API_BASE_URL.replace(/\/$/, "");
+    const baseUrl = normalizedBase.endsWith("/api")
+      ? normalizedBase
+      : `${normalizedBase}/api`;
+    const response = await fetch(
+      `${baseUrl}/system-wallet/transactions?page=${page}&limit=${limit}`,
+      {
+        method: "GET",
+        headers: getAuthHeaders(),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return response.json();
+  },
+
+  // Get system wallet transaction detail
+  getSystemWalletTransactionDetail: async (id: string) => {
+    const normalizedBase = API_BASE_URL.replace(/\/$/, "");
+    const baseUrl = normalizedBase.endsWith("/api")
+      ? normalizedBase
+      : `${normalizedBase}/api`;
+    const response = await fetch(
+      `${baseUrl}/system-wallet/transactions/${id}`,
+      {
+        method: "GET",
+        headers: getAuthHeaders(),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return response.json();
+  },
+
+  // Get system wallet chart data
+  getSystemWalletChart: async (
+    period?: "day" | "month" | "year",
+    startDate?: string,
+    endDate?: string
+  ) => {
+    const normalizedBase = API_BASE_URL.replace(/\/$/, "");
+    const baseUrl = normalizedBase.endsWith("/api")
+      ? normalizedBase
+      : `${normalizedBase}/api`;
+
+    const params = new URLSearchParams();
+    if (period) {
+      params.append("period", period);
+    }
+    if (startDate) {
+      params.append("startDate", startDate);
+    }
+    if (endDate) {
+      params.append("endDate", endDate);
+    }
+
+    const queryString = params.toString();
+    const url = queryString
+      ? `${baseUrl}/system-wallet/chart?${queryString}`
+      : `${baseUrl}/system-wallet/chart`;
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return response.json();
+  },
 };
 
 // Export the base URL for reference
