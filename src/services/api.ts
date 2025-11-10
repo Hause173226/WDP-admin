@@ -41,10 +41,14 @@ export const listingsService = {
   },
 
   // Get all listings
-  getAllListings: async () => {
+  getAllListings: async (page: number = 1, limit: number = 100) => {
     const timestamp = new Date().getTime();
+    const normalizedBase = API_BASE_URL.replace(/\/$/, "");
+    const baseUrl = normalizedBase.endsWith("/api")
+      ? normalizedBase
+      : `${normalizedBase}/api`;
     const response = await fetch(
-      `${API_BASE_URL}/listings?sortBy=newest&page=1&limit=100&_t=${timestamp}`,
+      `${baseUrl}/admin/listings/all?page=${page}&limit=${limit}&_t=${timestamp}`,
       {
         method: "GET",
         headers: getAuthHeaders(),
@@ -281,6 +285,27 @@ export const transactionsService = {
       ? normalizedBase
       : `${normalizedBase}/api`;
     const response = await fetch(`${baseUrl}/transactions/${appointmentId}`, {
+      method: "GET",
+      headers: getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return response.json();
+  },
+};
+
+// System Wallet API
+export const systemWalletService = {
+  // Get system wallet info
+  getSystemWallet: async () => {
+    const normalizedBase = API_BASE_URL.replace(/\/$/, "");
+    const baseUrl = normalizedBase.endsWith("/api")
+      ? normalizedBase
+      : `${normalizedBase}/api`;
+    const response = await fetch(`${baseUrl}/system-wallet`, {
       method: "GET",
       headers: getAuthHeaders(),
     });

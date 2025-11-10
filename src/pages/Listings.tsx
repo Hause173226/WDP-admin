@@ -1,4 +1,4 @@
-import { useState, useEffect, memo, useCallback, useRef } from "react";
+import { useState, useEffect, memo, useCallback, useRef, useMemo } from "react";
 import Layout from "../components/Layout";
 import { Search, Eye, CheckCircle, XCircle, RefreshCw } from "lucide-react";
 import { Listing } from "../types";
@@ -22,7 +22,8 @@ export default function Listings() {
   const [filter, setFilter] = useState<FilterStatus>("PendingReview");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [tableLoading, setTableLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [users, setUsers] = useState<
@@ -34,13 +35,13 @@ export default function Listings() {
     Map<string, Promise<{ fullName: string; email: string }>>
   >(new Map());
 
-  useEffect(() => {
-    fetchListings(filter);
-  }, [filter]);
-
-  const fetchListings = async (status: FilterStatus) => {
+  const fetchListings = useCallback(async (status: FilterStatus, isInitial = false) => {
     try {
-      setLoading(true);
+      if (isInitial) {
+        setInitialLoading(true);
+      } else {
+        setTableLoading(true);
+      }
       setError(null);
       const data = await listingsService.getAdminListings({ status });
       const list = Array.isArray(data) ? data : data.listings || [];
@@ -49,25 +50,41 @@ export default function Listings() {
       console.error("Error fetching listings:", err);
       setError("Không thể kết nối đến server");
     } finally {
-      setLoading(false);
+      if (isInitial) {
+        setInitialLoading(false);
+      } else {
+        setTableLoading(false);
+      }
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchListings(filter, true);
+  }, []); // Chỉ fetch lần đầu
+
+  useEffect(() => {
+    if (!initialLoading) {
+      fetchListings(filter, false);
+    }
+  }, [filter, initialLoading, fetchListings]);
 
   const safeIncludes = (hay?: string, needle?: string) =>
     (hay || "").toLowerCase().includes((needle || "").toLowerCase());
 
-  const filteredListings = listings.filter((listing) => {
-    const matchesFilter = listing.status === filter;
-    const s = searchTerm.trim();
-    if (!s) return matchesFilter;
-    const matchesSearch =
-      safeIncludes(listing.make, s) ||
-      safeIncludes(listing.model, s) ||
-      safeIncludes(listing.location?.city, s) ||
-      safeIncludes(listing.location?.district, s) ||
-      (listing.year ? String(listing.year) === s : false);
-    return matchesFilter && matchesSearch;
-  });
+  const filteredListings = useMemo(() => {
+    return listings.filter((listing) => {
+      const matchesFilter = listing.status === filter;
+      const s = searchTerm.trim();
+      if (!s) return matchesFilter;
+      const matchesSearch =
+        safeIncludes(listing.make, s) ||
+        safeIncludes(listing.model, s) ||
+        safeIncludes(listing.location?.city, s) ||
+        safeIncludes(listing.location?.district, s) ||
+        (listing.year ? String(listing.year) === s : false);
+      return matchesFilter && matchesSearch;
+    });
+  }, [listings, filter, searchTerm]);
 
   const getStatusBadge = (status: string) => {
     const styles = {
@@ -225,7 +242,7 @@ export default function Listings() {
 
       // Đóng modal
       setSelectedListing(null);
-      fetchListings(filter);
+      fetchListings(filter, false);
     } catch (err) {
       console.error("Error approving listing:", err);
       setError(err instanceof Error ? err.message : "Lỗi khi duyệt tin đăng");
@@ -251,7 +268,7 @@ export default function Listings() {
         )
       );
       setSelectedListing(null);
-      fetchListings(filter);
+      fetchListings(filter, false);
     } catch (err) {
       console.error("Error rejecting listing:", err);
       setError(err instanceof Error ? err.message : "Lỗi khi từ chối tin đăng");
@@ -260,7 +277,7 @@ export default function Listings() {
     }
   };
 
-  if (loading) {
+  if (initialLoading) {
     return (
       <Layout>
         <div className="flex items-center justify-center h-64">
@@ -334,21 +351,18 @@ export default function Listings() {
                   {status === "Rejected" && "Đã từ chối"}
                 </button>
               ))}
-              <button
-                onClick={() => fetchListings(filter)}
-                disabled={loading}
-                className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                <RefreshCw
-                  size={16}
-                  className={loading ? "animate-spin" : ""}
-                />
-                {loading ? "Đang tải..." : "Làm mới"}
-              </button>
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto relative">
+            {tableLoading && (
+              <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10">
+                <div className="flex items-center gap-2 text-gray-600">
+                  <RefreshCw size={20} className="animate-spin" />
+                  <span>Đang tải...</span>
+                </div>
+              </div>
+            )}
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-200">
