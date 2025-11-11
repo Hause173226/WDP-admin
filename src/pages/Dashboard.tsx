@@ -80,10 +80,10 @@ export default function Dashboard() {
         // Sort by completedAt or createdAt descending
         completed.sort((a: Transaction, b: Transaction) => {
           const dateA = new Date(
-            a.dates.completedAt || a.dates.createdAt
+            a.dates?.completedAt || a.dates?.createdAt || new Date()
           ).getTime();
           const dateB = new Date(
-            b.dates.completedAt || b.dates.createdAt
+            b.dates?.completedAt || b.dates?.createdAt || new Date()
           ).getTime();
           return dateB - dateA;
         });
@@ -204,7 +204,9 @@ export default function Dashboard() {
     // Calculate revenue from system wallet transactions
     systemWalletTransactions.forEach((transaction) => {
       const transactionDate = new Date(
-        transaction.dates.completedAt || transaction.dates.createdAt
+        transaction.dates?.completedAt ||
+          transaction.dates?.createdAt ||
+          new Date()
       );
 
       if (transactionDate >= startDate && transactionDate <= now) {
@@ -537,8 +539,9 @@ export default function Dashboard() {
                       </p>
                       <p className="text-xs text-gray-600">
                         {formatDate(
-                          transaction.dates.completedAt ||
-                            transaction.dates.createdAt
+                          transaction.dates?.completedAt ||
+                            transaction.dates?.createdAt ||
+                            new Date().toISOString()
                         )}
                       </p>
                     </div>

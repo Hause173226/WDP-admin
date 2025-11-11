@@ -151,10 +151,10 @@ export default function Reports() {
         transaction.counterparty.name,
         transaction.counterparty.email || "",
         transaction.amount.total.toString(),
-        transaction.dates.createdAt
+        transaction.dates?.createdAt
           ? formatDate(transaction.dates.createdAt)
           : "",
-        transaction.dates.completedAt
+        transaction.dates?.completedAt
           ? formatDate(transaction.dates.completedAt)
           : "",
         transaction.status,
@@ -313,7 +313,7 @@ export default function Reports() {
                   <td>${transaction.counterparty.name}</td>
                   <td>${formatPrice(transaction.amount.total)}</td>
                   <td>${formatDate(
-                    transaction.dates.completedAt || transaction.dates.createdAt
+                    transaction.dates?.completedAt || transaction.dates?.createdAt || new Date().toISOString()
                   )}</td>
                   <td>${transaction.status}</td>
                 </tr>
@@ -455,7 +455,7 @@ export default function Reports() {
     // Calculate revenue from system wallet transactions
     systemWalletTransactions.forEach((transaction) => {
       const transactionDate = new Date(
-        transaction.dates.completedAt || transaction.dates.createdAt
+        transaction.dates?.completedAt || transaction.dates?.createdAt || new Date()
       );
 
       if (transactionDate >= startDate && transactionDate <= now) {
@@ -498,10 +498,10 @@ export default function Reports() {
     return filtered
       .sort((a, b) => {
         const dateA = new Date(
-          a.dates.completedAt || a.dates.createdAt
+          a.dates?.completedAt || a.dates?.createdAt || new Date()
         ).getTime();
         const dateB = new Date(
-          b.dates.completedAt || b.dates.createdAt
+          b.dates?.completedAt || b.dates?.createdAt || new Date()
         ).getTime();
         return dateB - dateA;
       })
@@ -817,8 +817,9 @@ export default function Reports() {
                       </td>
                       <td className="py-4 px-4 text-gray-600">
                         {formatDate(
-                          transaction.dates.completedAt ||
-                            transaction.dates.createdAt
+                          transaction.dates?.completedAt ||
+                            transaction.dates?.createdAt ||
+                            new Date().toISOString()
                         )}
                       </td>
                       <td className="py-4 px-4">
