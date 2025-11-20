@@ -1,21 +1,45 @@
 import Layout from "../components/Layout";
-import {
-  Users,
-  FileText,
-  DollarSign,
-  CheckCircle,
-  Award,
-  TrendingUp,
-  TrendingDown,
-} from "lucide-react";
-import { useState, useEffect, useMemo } from "react";
+import { Users, FileText, DollarSign, CheckCircle, Award } from "lucide-react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   usersService,
   transactionsService,
   listingsService,
   systemWalletService,
 } from "../services/api";
-import { User, Transaction, Listing, SystemWallet } from "../types";
+import {
+  User,
+  Transaction,
+  Listing,
+  SystemWallet,
+  RevenueChartResponse,
+} from "../types";
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler,
+} from "chart.js";
+import { Line } from "react-chartjs-2";
+
+// Register Chart.js components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+);
 
 type TimeFilter = "7days" | "30days" | "year";
 
@@ -28,19 +52,74 @@ export default function Dashboard() {
     Transaction[]
   >([]);
   const [systemWallet, setSystemWallet] = useState<SystemWallet | null>(null);
-  const [systemWalletTransactions, setSystemWalletTransactions] = useState<
-    Transaction[]
-  >([]);
   const [error, setError] = useState<string | null>(null);
+  const [revenueChartData, setRevenueChartData] =
+    useState<RevenueChartResponse | null>(null);
+  const [revenueLoading, setRevenueLoading] = useState(false);
+  const [revenueError, setRevenueError] = useState<string | null>(null);
+
+  const fetchRevenueChartData = useCallback(async () => {
+    try {
+      setRevenueLoading(true);
+      setRevenueError(null);
+
+      const now = new Date();
+      let period: "day" | "month" | "year" = "day";
+      let startDate: Date;
+      const endDate: Date = new Date(now);
+
+      // Calculate start and end dates based on filter
+      switch (timeFilter) {
+        case "7days":
+          startDate = new Date(now);
+          startDate.setDate(startDate.getDate() - 6); // 7 days including today
+          period = "day";
+          break;
+        case "30days":
+          startDate = new Date(now);
+          startDate.setDate(startDate.getDate() - 29); // 30 days including today
+          period = "day";
+          break;
+        case "year":
+          startDate = new Date(now.getFullYear(), 0, 1); // Start of year
+          period = "month";
+          break;
+        default:
+          startDate = new Date(now);
+          startDate.setDate(startDate.getDate() - 29);
+      }
+
+      // Format dates to ISO 8601
+      const startDateISO = startDate.toISOString();
+      const endDateISO = endDate.toISOString();
+
+      const response = await systemWalletService.getRevenueChartData(
+        period,
+        startDateISO,
+        endDateISO
+      );
+
+      if (response.success && response.data) {
+        setRevenueChartData(response);
+      } else {
+        setRevenueError("Không thể tải dữ liệu biểu đồ doanh thu");
+      }
+    } catch (err) {
+      console.error("Error fetching revenue chart data:", err);
+      setRevenueError(
+        err instanceof Error
+          ? err.message
+          : "Không thể tải dữ liệu biểu đồ doanh thu"
+      );
+    } finally {
+      setRevenueLoading(false);
+    }
+  }, [timeFilter]);
 
   useEffect(() => {
     fetchDashboardData();
-    fetchSystemWalletTransactions();
-  }, []);
-
-  useEffect(() => {
-    fetchSystemWalletTransactions();
-  }, [timeFilter]);
+    fetchRevenueChartData();
+  }, [fetchRevenueChartData]);
 
   const fetchDashboardData = async () => {
     try {
@@ -103,63 +182,6 @@ export default function Dashboard() {
     }
   };
 
-  const fetchSystemWalletTransactions = async () => {
-    try {
-      // Fetch all system wallet transactions for chart
-      // Fetch multiple pages if needed
-      let allTransactions: Transaction[] = [];
-      let page = 1;
-      let hasMore = true;
-      const limit = 100;
-
-      while (hasMore) {
-        const response = await systemWalletService.getSystemWalletTransactions(
-          page,
-          limit
-        );
-        console.log(`Fetching page ${page}, response:`, response);
-
-        let transactions: Transaction[] = [];
-
-        if (response.success && response.data) {
-          if (Array.isArray(response.data)) {
-            transactions = response.data;
-          } else if (response.data.transactions) {
-            transactions = response.data.transactions;
-          } else if (response.data.data) {
-            transactions = response.data.data;
-          }
-        } else if (Array.isArray(response)) {
-          transactions = response;
-        } else if (response.data && Array.isArray(response.data)) {
-          transactions = response.data;
-        }
-
-        allTransactions = [...allTransactions, ...transactions];
-
-        // Check if there are more pages
-        if (response.pagination) {
-          hasMore = page < response.pagination.pages;
-          page++;
-        } else if (transactions.length < limit) {
-          hasMore = false;
-        } else {
-          page++;
-          // Safety limit to prevent infinite loop
-          if (page > 100) {
-            hasMore = false;
-          }
-        }
-      }
-
-      console.log("Total transactions fetched:", allTransactions.length);
-      console.log("Sample transactions:", allTransactions.slice(0, 3));
-      setSystemWalletTransactions(allTransactions);
-    } catch (err) {
-      console.error("Error fetching system wallet transactions:", err);
-    }
-  };
-
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat("vi-VN", {
       style: "currency",
@@ -182,152 +204,124 @@ export default function Dashboard() {
     });
   };
 
-  // Calculate revenue data from system wallet transactions
-  const revenueData = useMemo(() => {
-    if (systemWalletTransactions.length === 0) {
-      return [];
-    }
-
-    const now = new Date();
-    let startDate: Date;
-    let periodCount: number;
-    let periodLabel: (date: Date) => string;
-
-    switch (timeFilter) {
-      case "7days":
-        startDate = new Date(now);
-        startDate.setDate(startDate.getDate() - 6); // 7 days including today
-        periodCount = 7;
-        periodLabel = (date: Date) => {
+  // Format chart labels based on period
+  const formatChartLabels = (
+    labels: string[],
+    period: "day" | "month" | "year"
+  ): string[] => {
+    return labels.map((label) => {
+      const date = new Date(label);
+      switch (period) {
+        case "day":
           return date.toLocaleDateString("vi-VN", {
             day: "2-digit",
             month: "2-digit",
           });
-        };
-        break;
-      case "30days":
-        startDate = new Date(now);
-        startDate.setDate(startDate.getDate() - 29); // 30 days including today
-        periodCount = 30;
-        periodLabel = (date: Date) => {
+        case "month":
           return date.toLocaleDateString("vi-VN", {
-            day: "2-digit",
             month: "2-digit",
+            year: "numeric",
           });
-        };
-        break;
-      case "year":
-        startDate = new Date(now.getFullYear(), 0, 1); // Start of year
-        periodCount = 12;
-        periodLabel = (date: Date) => {
-          return date.toLocaleDateString("vi-VN", { month: "2-digit" });
-        };
-        break;
-      default:
-        return [];
-    }
-
-    // Initialize revenue map
-    const revenueMap = new Map<string, number>();
-
-    // Initialize all periods with 0 revenue
-    for (let i = 0; i < periodCount; i++) {
-      const periodDate = new Date(startDate);
-      if (timeFilter === "year") {
-        periodDate.setMonth(i);
-      } else {
-        periodDate.setDate(startDate.getDate() + i);
-      }
-      const key = periodLabel(periodDate);
-      revenueMap.set(key, 0);
-    }
-
-    // Calculate revenue from system wallet transactions
-    console.log(
-      "Calculating revenue from",
-      systemWalletTransactions.length,
-      "transactions"
-    );
-    console.log(
-      "Time filter:",
-      timeFilter,
-      "Start date:",
-      startDate,
-      "Now:",
-      now
-    );
-
-    systemWalletTransactions.forEach((transaction, index) => {
-      const transactionDate = new Date(
-        transaction.dates?.completedAt ||
-          transaction.dates?.createdAt ||
-          new Date()
-      );
-
-      // Normalize dates to start of day for comparison (remove time component)
-      const normalizedTransactionDate = new Date(
-        transactionDate.getFullYear(),
-        transactionDate.getMonth(),
-        transactionDate.getDate()
-      );
-      const normalizedStartDate = new Date(
-        startDate.getFullYear(),
-        startDate.getMonth(),
-        startDate.getDate()
-      );
-      const normalizedNow = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate()
-      );
-
-      if (
-        normalizedTransactionDate >= normalizedStartDate &&
-        normalizedTransactionDate <= normalizedNow
-      ) {
-        let key: string;
-        if (timeFilter === "year") {
-          key = periodLabel(
-            new Date(
-              transactionDate.getFullYear(),
-              transactionDate.getMonth(),
-              1
-            )
-          );
-        } else {
-          key = periodLabel(transactionDate);
-        }
-
-        const currentRevenue = revenueMap.get(key) || 0;
-        const transactionAmount = transaction.amount?.total || 0;
-        // Use amount.total from system wallet transaction
-        revenueMap.set(key, currentRevenue + transactionAmount);
-
-        if (index < 5) {
-          console.log(
-            `Transaction ${index}: date=${transactionDate.toISOString()}, amount=${transactionAmount}, key=${key}`
-          );
-        }
-      } else if (index < 5) {
-        console.log(
-          `Transaction ${index} filtered out: date=${transactionDate.toISOString()}, start=${normalizedStartDate.toISOString()}, end=${normalizedNow.toISOString()}`
-        );
+        case "year":
+          return date.getFullYear().toString();
+        default:
+          return label;
       }
     });
+  };
 
-    console.log("Revenue map:", Array.from(revenueMap.entries()));
+  // Prepare chart data
+  const chartData = useMemo(() => {
+    if (!revenueChartData?.data) {
+      return null;
+    }
 
-    // Convert map to array and sort by date
-    return Array.from(revenueMap.entries())
-      .map(([date, revenue]) => ({
-        date,
-        revenue,
-      }))
-      .sort((a, b) => {
-        // Sort by date string (works for day/month format)
-        return a.date.localeCompare(b.date);
-      });
-  }, [systemWalletTransactions, timeFilter]);
+    const period = timeFilter === "year" ? "month" : "day";
+    const formattedLabels = formatChartLabels(
+      revenueChartData.data.labels,
+      period
+    );
+
+    return {
+      labels: formattedLabels,
+      datasets: revenueChartData.data.datasets.map((dataset) => ({
+        ...dataset,
+        tension: 0.4,
+        fill: true,
+      })),
+    };
+  }, [revenueChartData, timeFilter]);
+
+  // Chart options
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: "top" as const,
+        labels: {
+          usePointStyle: true,
+          padding: 15,
+          font: {
+            size: 12,
+          },
+        },
+      },
+      tooltip: {
+        mode: "index" as const,
+        intersect: false,
+        callbacks: {
+          label: function (context: {
+            dataset: { label?: string };
+            parsed: { y: number | null };
+          }) {
+            let label = context.dataset.label || "";
+            if (label) {
+              label += ": ";
+            }
+            if (context.parsed.y !== null) {
+              label += formatPrice(context.parsed.y);
+            }
+            return label;
+          },
+        },
+      },
+    },
+    scales: {
+      x: {
+        grid: {
+          display: false,
+        },
+        ticks: {
+          maxRotation: 45,
+          minRotation: 45,
+          font: {
+            size: 10,
+          },
+        },
+      },
+      y: {
+        grid: {
+          color: "rgba(0, 0, 0, 0.05)",
+        },
+        ticks: {
+          callback: function (value: string | number) {
+            const numValue =
+              typeof value === "string" ? parseFloat(value) : value;
+            if (numValue >= 1000000) {
+              return (numValue / 1000000).toFixed(1) + "M";
+            } else if (numValue >= 1000) {
+              return (numValue / 1000).toFixed(0) + "K";
+            }
+            return numValue.toString();
+          },
+          font: {
+            size: 10,
+          },
+        },
+      },
+    },
+  };
 
   // Calculate stats from real data
   const totalUsers = users.length;
@@ -360,32 +354,24 @@ export default function Dashboard() {
       icon: Users,
       label: "Người dùng",
       value: formatNumber(totalUsers),
-      change: "+12%",
-      isPositive: true,
       color: "blue",
     },
     {
       icon: FileText,
       label: "Tin đăng",
       value: formatNumber(totalListings),
-      change: "+8%",
-      isPositive: true,
       color: "green",
     },
     {
       icon: DollarSign,
       label: "Doanh thu",
       value: formatPrice(totalRevenue),
-      change: "+15%",
-      isPositive: true,
       color: "purple",
     },
     {
       icon: CheckCircle,
       label: "GD thành công",
       value: formatNumber(totalCompletedTransactions),
-      change: "+5%",
-      isPositive: true,
       color: "orange",
     },
   ];
@@ -436,23 +422,11 @@ export default function Dashboard() {
                 key={index}
                 className="bg-white rounded-2xl border border-gray-200 p-6"
               >
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center mb-4">
                   <div
                     className={`w-12 h-12 bg-${stat.color}-100 rounded-xl flex items-center justify-center`}
                   >
                     <Icon className={`text-${stat.color}-600`} size={24} />
-                  </div>
-                  <div
-                    className={`flex items-center gap-1 text-sm font-medium ${
-                      stat.isPositive ? "text-green-600" : "text-red-600"
-                    }`}
-                  >
-                    {stat.isPositive ? (
-                      <TrendingUp size={16} />
-                    ) : (
-                      <TrendingDown size={16} />
-                    )}
-                    {stat.change}
                   </div>
                 </div>
                 <p className="text-sm text-gray-600 mb-1">{stat.label}</p>
@@ -486,45 +460,103 @@ export default function Dashboard() {
                 ))}
               </div>
             </div>
-            <div className="h-64 flex items-end justify-between gap-2">
-              {revenueData.length === 0 ? (
-                <div className="w-full text-center py-8 text-gray-500">
+            {revenueLoading ? (
+              <div className="h-64 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <p className="mt-2 text-gray-600">Đang tải dữ liệu...</p>
+                </div>
+              </div>
+            ) : revenueError ? (
+              <div className="h-64 flex items-center justify-center">
+                <div className="text-center text-red-600">
+                  <p>{revenueError}</p>
+                  <button
+                    onClick={fetchRevenueChartData}
+                    className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Thử lại
+                  </button>
+                </div>
+              </div>
+            ) : !chartData ? (
+              <div className="h-64 flex items-center justify-center">
+                <div className="text-center text-gray-500">
                   Chưa có dữ liệu doanh thu
                 </div>
-              ) : (
-                revenueData.map((data, index) => {
-                  const maxRevenue = Math.max(
-                    ...revenueData.map((d) => d.revenue),
-                    1 // Avoid division by zero
-                  );
-                  const height =
-                    maxRevenue > 0 ? (data.revenue / maxRevenue) * 100 : 0;
-                  return (
-                    <div
-                      key={index}
-                      className="flex-1 flex flex-col items-center gap-2"
-                    >
-                      <div
-                        className="w-full bg-gray-100 rounded-t-lg relative group cursor-pointer hover:bg-blue-50 transition-colors"
-                        style={{
-                          height: `${height}%`,
-                          minHeight: height > 0 ? "4px" : "0",
-                        }}
-                      >
-                        <div
-                          className="absolute inset-0 bg-blue-600 rounded-t-lg"
-                          style={{ height: "100%" }}
-                        ></div>
-                        <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                          {formatPrice(data.revenue)}
-                        </div>
-                      </div>
-                      <span className="text-xs text-gray-600">{data.date}</span>
-                    </div>
-                  );
-                })
-              )}
-            </div>
+              </div>
+            ) : (
+              <div className="h-64">
+                <Line data={chartData} options={chartOptions} />
+              </div>
+            )}
+
+            {/* Summary Section */}
+            {revenueChartData?.data?.summary && (
+              <div className="mt-6 pt-6 border-t border-gray-200">
+                <h3 className="text-sm font-semibold text-gray-900 mb-4">
+                  Tổng quan doanh thu
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                  <div>
+                    <p className="text-xs text-gray-600 mb-1">
+                      Doanh thu giao dịch
+                    </p>
+                    <p className="text-sm font-semibold text-green-600">
+                      {formatPrice(
+                        revenueChartData.data.summary.totalTransactionRevenue
+                      )}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {formatNumber(
+                        revenueChartData.data.summary.totalTransactions
+                      )}{" "}
+                      giao dịch
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-600 mb-1">
+                      Doanh thu membership
+                    </p>
+                    <p className="text-sm font-semibold text-blue-600">
+                      {formatPrice(
+                        revenueChartData.data.summary.totalMembershipRevenue
+                      )}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {formatNumber(
+                        revenueChartData.data.summary.totalMemberships
+                      )}{" "}
+                      gói
+                    </p>
+                  </div>
+                  <div className="col-span-2 md:col-span-1">
+                    <p className="text-xs text-gray-600 mb-1">Tổng doanh thu</p>
+                    <p className="text-sm font-semibold text-purple-600">
+                      {formatPrice(revenueChartData.data.summary.totalRevenue)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-600 mb-1">Tổng giao dịch</p>
+                    <p className="text-sm font-semibold text-gray-900">
+                      {formatNumber(
+                        revenueChartData.data.summary.totalTransactions
+                      )}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-600 mb-1">
+                      Tổng membership
+                    </p>
+                    <p className="text-sm font-semibold text-gray-900">
+                      {formatNumber(
+                        revenueChartData.data.summary.totalMemberships
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="bg-white rounded-2xl border border-gray-200 p-6">
