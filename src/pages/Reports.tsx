@@ -1,13 +1,45 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import Layout from "../components/Layout";
-import { Download, TrendingUp, Filter } from "lucide-react";
+import { Download, Filter } from "lucide-react";
 import {
   usersService,
   transactionsService,
   listingsService,
   systemWalletService,
 } from "../services/api";
-import { User, Transaction, Listing, SystemWallet } from "../types";
+import {
+  User,
+  Transaction,
+  Listing,
+  SystemWallet,
+  RevenueChartResponse,
+} from "../types";
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler,
+} from "chart.js";
+import { Line } from "react-chartjs-2";
+
+// Register Chart.js components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+);
 
 type TimeFilter = "7days" | "30days" | "year";
 type ExportFormat = "csv" | "pdf";
@@ -22,19 +54,78 @@ export default function Reports() {
   const [listings, setListings] = useState<Listing[]>([]);
   const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
   const [systemWallet, setSystemWallet] = useState<SystemWallet | null>(null);
-  const [systemWalletTransactions, setSystemWalletTransactions] = useState<
-    Transaction[]
-  >([]);
   const [error, setError] = useState<string | null>(null);
+  const [revenueChartData, setRevenueChartData] =
+    useState<RevenueChartResponse | null>(null);
+  const [revenueLoading, setRevenueLoading] = useState(false);
+  const [revenueError, setRevenueError] = useState<string | null>(null);
+
+  const fetchRevenueChartData = useCallback(async () => {
+    try {
+      setRevenueLoading(true);
+      setRevenueError(null);
+
+      const now = new Date();
+      let period: "day" | "month" | "year" = "day";
+      let startDate: Date;
+      const endDate: Date = new Date(now);
+
+      // Calculate start and end dates based on filter
+      switch (timeFilter) {
+        case "7days":
+          startDate = new Date(now);
+          startDate.setDate(startDate.getDate() - 6); // 7 days including today
+          period = "day";
+          break;
+        case "30days":
+          startDate = new Date(now);
+          startDate.setDate(startDate.getDate() - 29); // 30 days including today
+          period = "day";
+          break;
+        case "year":
+          startDate = new Date(now.getFullYear(), 0, 1); // Start of year
+          period = "month";
+          break;
+        default:
+          startDate = new Date(now);
+          startDate.setDate(startDate.getDate() - 29);
+      }
+
+      // Format dates to ISO 8601
+      const startDateISO = startDate.toISOString();
+      const endDateISO = endDate.toISOString();
+
+      const response = await systemWalletService.getRevenueChartData(
+        period,
+        startDateISO,
+        endDateISO
+      );
+
+      if (response.success && response.data) {
+        setRevenueChartData(response);
+      } else {
+        setRevenueError("Không thể tải dữ liệu biểu đồ doanh thu");
+      }
+    } catch (err) {
+      console.error("Error fetching revenue chart data:", err);
+      setRevenueError(
+        err instanceof Error
+          ? err.message
+          : "Không thể tải dữ liệu biểu đồ doanh thu"
+      );
+    } finally {
+      setRevenueLoading(false);
+    }
+  }, [timeFilter]);
 
   useEffect(() => {
     fetchReportsData();
-    fetchSystemWalletTransactions();
-  }, []);
+    fetchRevenueChartData();
+  }, [fetchRevenueChartData]);
 
   useEffect(() => {
-    fetchSystemWalletTransactions();
-  }, [timeFilter]);
+    fetchRevenueChartData();
+  }, [fetchRevenueChartData]);
 
   const fetchReportsData = async () => {
     try {
@@ -82,22 +173,6 @@ export default function Reports() {
     }
   };
 
-  const fetchSystemWalletTransactions = async () => {
-    try {
-      // Fetch all system wallet transactions for chart
-      // Use a large limit to get all transactions
-      const response = await systemWalletService.getSystemWalletTransactions(
-        1,
-        1000
-      );
-      if (response.success && response.data) {
-        setSystemWalletTransactions(response.data);
-      }
-    } catch (err) {
-      console.error("Error fetching system wallet transactions:", err);
-    }
-  };
-
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat("vi-VN", {
       style: "currency",
@@ -116,6 +191,125 @@ export default function Reports() {
       month: "2-digit",
       day: "2-digit",
     });
+  };
+
+  // Format chart labels based on period
+  const formatChartLabels = (
+    labels: string[],
+    period: "day" | "month" | "year"
+  ): string[] => {
+    return labels.map((label) => {
+      const date = new Date(label);
+      switch (period) {
+        case "day":
+          return date.toLocaleDateString("vi-VN", {
+            day: "2-digit",
+            month: "2-digit",
+          });
+        case "month":
+          return date.toLocaleDateString("vi-VN", {
+            month: "2-digit",
+            year: "numeric",
+          });
+        case "year":
+          return date.getFullYear().toString();
+        default:
+          return label;
+      }
+    });
+  };
+
+  // Prepare chart data
+  const chartData = useMemo(() => {
+    if (!revenueChartData?.data) {
+      return null;
+    }
+
+    const period = timeFilter === "year" ? "month" : "day";
+    const formattedLabels = formatChartLabels(
+      revenueChartData.data.labels,
+      period
+    );
+
+    return {
+      labels: formattedLabels,
+      datasets: revenueChartData.data.datasets.map((dataset) => ({
+        ...dataset,
+        tension: 0.4,
+        fill: true,
+      })),
+    };
+  }, [revenueChartData, timeFilter]);
+
+  // Chart options
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: "top" as const,
+        labels: {
+          usePointStyle: true,
+          padding: 15,
+          font: {
+            size: 12,
+          },
+        },
+      },
+      tooltip: {
+        mode: "index" as const,
+        intersect: false,
+        callbacks: {
+          label: function (context: {
+            dataset: { label?: string };
+            parsed: { y: number | null };
+          }) {
+            let label = context.dataset.label || "";
+            if (label) {
+              label += ": ";
+            }
+            if (context.parsed.y !== null) {
+              label += formatPrice(context.parsed.y);
+            }
+            return label;
+          },
+        },
+      },
+    },
+    scales: {
+      x: {
+        grid: {
+          display: false,
+        },
+        ticks: {
+          maxRotation: 45,
+          minRotation: 45,
+          font: {
+            size: 10,
+          },
+        },
+      },
+      y: {
+        grid: {
+          color: "rgba(0, 0, 0, 0.05)",
+        },
+        ticks: {
+          callback: function (value: string | number) {
+            const numValue =
+              typeof value === "string" ? parseFloat(value) : value;
+            if (numValue >= 1000000) {
+              return (numValue / 1000000).toFixed(1) + "M";
+            } else if (numValue >= 1000) {
+              return (numValue / 1000).toFixed(0) + "K";
+            }
+            return numValue.toString();
+          },
+          font: {
+            size: 10,
+          },
+        },
+      },
+    },
   };
 
   const handleExport = (format: ExportFormat) => {
@@ -313,7 +507,9 @@ export default function Reports() {
                   <td>${transaction.counterparty.name}</td>
                   <td>${formatPrice(transaction.amount.total)}</td>
                   <td>${formatDate(
-                    transaction.dates?.completedAt || transaction.dates?.createdAt || new Date().toISOString()
+                    transaction.dates?.completedAt ||
+                      transaction.dates?.createdAt ||
+                      new Date().toISOString()
                   )}</td>
                   <td>${transaction.status}</td>
                 </tr>
@@ -393,98 +589,6 @@ export default function Reports() {
   };
 
   const transactionStats = calculateTransactionStats();
-
-  // Calculate revenue data from system wallet transactions
-  const revenueData = useMemo(() => {
-    if (systemWalletTransactions.length === 0) {
-      return [];
-    }
-
-    const now = new Date();
-    let startDate: Date;
-    let periodCount: number;
-    let periodLabel: (date: Date) => string;
-
-    switch (timeFilter) {
-      case "7days":
-        startDate = new Date(now);
-        startDate.setDate(startDate.getDate() - 6);
-        periodCount = 7;
-        periodLabel = (date: Date) => {
-          return date.toLocaleDateString("vi-VN", {
-            day: "2-digit",
-            month: "2-digit",
-          });
-        };
-        break;
-      case "30days":
-        startDate = new Date(now);
-        startDate.setDate(startDate.getDate() - 29);
-        periodCount = 30;
-        periodLabel = (date: Date) => {
-          return date.toLocaleDateString("vi-VN", {
-            day: "2-digit",
-            month: "2-digit",
-          });
-        };
-        break;
-      case "year":
-        startDate = new Date(now.getFullYear(), 0, 1);
-        periodCount = 12;
-        periodLabel = (date: Date) => {
-          return date.toLocaleDateString("vi-VN", { month: "2-digit" });
-        };
-        break;
-      default:
-        return [];
-    }
-
-    const revenueMap = new Map<string, number>();
-
-    for (let i = 0; i < periodCount; i++) {
-      const periodDate = new Date(startDate);
-      if (timeFilter === "year") {
-        periodDate.setMonth(i);
-      } else {
-        periodDate.setDate(startDate.getDate() + i);
-      }
-      const key = periodLabel(periodDate);
-      revenueMap.set(key, 0);
-    }
-
-    // Calculate revenue from system wallet transactions
-    systemWalletTransactions.forEach((transaction) => {
-      const transactionDate = new Date(
-        transaction.dates?.completedAt || transaction.dates?.createdAt || new Date()
-      );
-
-      if (transactionDate >= startDate && transactionDate <= now) {
-        let key: string;
-        if (timeFilter === "year") {
-          key = periodLabel(
-            new Date(
-              transactionDate.getFullYear(),
-              transactionDate.getMonth(),
-              1
-            )
-          );
-        } else {
-          key = periodLabel(transactionDate);
-        }
-
-        const currentRevenue = revenueMap.get(key) || 0;
-        // Use amount.total from system wallet transaction
-        revenueMap.set(key, currentRevenue + (transaction.amount?.total || 0));
-      }
-    });
-
-    return Array.from(revenueMap.entries())
-      .map(([date, revenue]) => ({
-        date,
-        revenue,
-      }))
-      .sort((a, b) => a.date.localeCompare(b.date));
-  }, [systemWalletTransactions, timeFilter]);
 
   // Get latest transactions (sorted by date, latest first)
   const latestTransactions = useMemo(() => {
@@ -603,53 +707,33 @@ export default function Reports() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           <div className="bg-white rounded-2xl border border-gray-200 p-6">
             <p className="text-sm text-gray-600 mb-2">Người dùng</p>
-            <p className="text-3xl font-bold text-gray-900 mb-2">
+            <p className="text-3xl font-bold text-gray-900">
               {formatNumber(totalUsers)}
             </p>
-            <div className="flex items-center gap-1 text-sm text-green-600">
-              <TrendingUp size={16} />
-              <span>+12%</span>
-            </div>
           </div>
           <div className="bg-white rounded-2xl border border-gray-200 p-6">
             <p className="text-sm text-gray-600 mb-2">Tin đăng</p>
-            <p className="text-3xl font-bold text-gray-900 mb-2">
+            <p className="text-3xl font-bold text-gray-900">
               {formatNumber(totalListings)}
             </p>
-            <div className="flex items-center gap-1 text-sm text-green-600">
-              <TrendingUp size={16} />
-              <span>+8%</span>
-            </div>
           </div>
           <div className="bg-white rounded-2xl border border-gray-200 p-6">
             <p className="text-sm text-gray-600 mb-2">Doanh thu</p>
-            <p className="text-2xl font-bold text-gray-900 mb-2">
+            <p className="text-2xl font-bold text-gray-900">
               {formatPrice(totalRevenue)}
             </p>
-            <div className="flex items-center gap-1 text-sm text-green-600">
-              <TrendingUp size={16} />
-              <span>+15%</span>
-            </div>
           </div>
           <div className="bg-white rounded-2xl border border-gray-200 p-6">
             <p className="text-sm text-gray-600 mb-2">GD thành công</p>
-            <p className="text-3xl font-bold text-gray-900 mb-2">
+            <p className="text-3xl font-bold text-gray-900">
               {formatNumber(totalCompletedTransactions)}
             </p>
-            <div className="flex items-center gap-1 text-sm text-green-600">
-              <TrendingUp size={16} />
-              <span>+5%</span>
-            </div>
           </div>
           <div className="bg-white rounded-2xl border border-gray-200 p-6">
             <p className="text-sm text-gray-600 mb-2">Tin kiểm định</p>
-            <p className="text-3xl font-bold text-gray-900 mb-2">
+            <p className="text-3xl font-bold text-gray-900">
               {formatNumber(certifiedListings)}
             </p>
-            <div className="flex items-center gap-1 text-sm text-green-600">
-              <TrendingUp size={16} />
-              <span>+10%</span>
-            </div>
           </div>
         </div>
 
@@ -657,53 +741,101 @@ export default function Reports() {
           <h2 className="text-lg font-semibold text-gray-900 mb-6">
             Biểu đồ doanh thu
           </h2>
-          <div className="h-80 flex items-end justify-between gap-3">
-            {revenueData.length === 0 ? (
-              <div className="w-full text-center py-8 text-gray-500">
+          {revenueLoading ? (
+            <div className="h-80 flex items-center justify-center">
+              <div className="text-center">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <p className="mt-2 text-gray-600">Đang tải dữ liệu...</p>
+              </div>
+            </div>
+          ) : revenueError ? (
+            <div className="h-80 flex items-center justify-center">
+              <div className="text-center text-red-600">
+                <p>{revenueError}</p>
+                <button
+                  onClick={() => fetchRevenueChartData()}
+                  className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Thử lại
+                </button>
+              </div>
+            </div>
+          ) : !chartData ? (
+            <div className="h-80 flex items-center justify-center">
+              <div className="text-center text-gray-500">
                 Chưa có dữ liệu doanh thu
               </div>
-            ) : (
-              revenueData.map(
-                (data: { date: string; revenue: number }, index: number) => {
-                  const maxRevenue = Math.max(
-                    ...revenueData.map(
-                      (d: { date: string; revenue: number }) => d.revenue
-                    ),
-                    1
-                  );
-                  const height =
-                    maxRevenue > 0 ? (data.revenue / maxRevenue) * 100 : 0;
-                  return (
-                    <div
-                      key={index}
-                      className="flex-1 flex flex-col items-center gap-3"
-                    >
-                      <div
-                        className="w-full bg-gray-100 rounded-t-xl relative group cursor-pointer hover:bg-blue-50 transition-colors"
-                        style={{
-                          height: `${height}%`,
-                          minHeight: height > 0 ? "40px" : "0",
-                        }}
-                      >
-                        <div className="absolute inset-0 bg-gradient-to-t from-blue-600 to-blue-400 rounded-t-xl"></div>
-                        <div className="absolute -top-16 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-3 py-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-lg z-10">
-                          <div className="font-semibold">
-                            {formatPrice(data.revenue)}
-                          </div>
-                          <div className="text-xs text-gray-300">
-                            {data.date}
-                          </div>
-                        </div>
-                      </div>
-                      <span className="text-sm text-gray-600 font-medium">
-                        {data.date}
-                      </span>
-                    </div>
-                  );
-                }
-              )
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="h-80">
+              <Line data={chartData} options={chartOptions} />
+            </div>
+          )}
+
+          {/* Summary Section */}
+          {revenueChartData?.data?.summary && (
+            <div className="mt-6 pt-6 border-t border-gray-200">
+              <h3 className="text-sm font-semibold text-gray-900 mb-4">
+                Tổng quan doanh thu
+              </h3>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                <div>
+                  <p className="text-xs text-gray-600 mb-1">
+                    Doanh thu giao dịch
+                  </p>
+                  <p className="text-sm font-semibold text-green-600">
+                    {formatPrice(
+                      revenueChartData.data.summary.totalTransactionRevenue
+                    )}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {formatNumber(
+                      revenueChartData.data.summary.totalTransactions
+                    )}{" "}
+                    giao dịch
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-600 mb-1">
+                    Doanh thu membership
+                  </p>
+                  <p className="text-sm font-semibold text-blue-600">
+                    {formatPrice(
+                      revenueChartData.data.summary.totalMembershipRevenue
+                    )}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {formatNumber(
+                      revenueChartData.data.summary.totalMemberships
+                    )}{" "}
+                    gói
+                  </p>
+                </div>
+                <div className="col-span-2 md:col-span-1">
+                  <p className="text-xs text-gray-600 mb-1">Tổng doanh thu</p>
+                  <p className="text-sm font-semibold text-purple-600">
+                    {formatPrice(revenueChartData.data.summary.totalRevenue)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-600 mb-1">Tổng giao dịch</p>
+                  <p className="text-sm font-semibold text-gray-900">
+                    {formatNumber(
+                      revenueChartData.data.summary.totalTransactions
+                    )}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-600 mb-1">Tổng membership</p>
+                  <p className="text-sm font-semibold text-gray-900">
+                    {formatNumber(
+                      revenueChartData.data.summary.totalMemberships
+                    )}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="bg-white rounded-2xl border border-gray-200 p-6">

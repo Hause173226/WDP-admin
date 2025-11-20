@@ -397,6 +397,51 @@ export const systemWalletService = {
 
     return response.json();
   },
+
+  // Get revenue chart data
+  getRevenueChartData: async (
+    period?: "day" | "month" | "year",
+    startDate?: string,
+    endDate?: string
+  ) => {
+    const normalizedBase = API_BASE_URL.replace(/\/$/, "");
+    const baseUrl = normalizedBase.endsWith("/api")
+      ? normalizedBase
+      : `${normalizedBase}/api`;
+
+    const params = new URLSearchParams();
+    if (period) {
+      params.append("period", period);
+    }
+    if (startDate) {
+      params.append("startDate", startDate);
+    }
+    if (endDate) {
+      params.append("endDate", endDate);
+    }
+
+    const queryString = params.toString();
+    const url = queryString
+      ? `${baseUrl}/system-wallet/revenue-chart?${queryString}`
+      : `${baseUrl}/system-wallet/revenue-chart`;
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error("Chưa đăng nhập. Vui lòng đăng nhập lại.");
+      }
+      if (response.status === 403) {
+        throw new Error("Bạn không có quyền truy cập dữ liệu này.");
+      }
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return response.json();
+  },
 };
 
 // Export the base URL for reference

@@ -1,12 +1,49 @@
 import { useState, useEffect, useCallback } from "react";
 import Layout from "../components/Layout";
 import { History, Wallet, TrendingUp, Filter } from "lucide-react";
-import { SystemWallet, Transaction, TransactionsResponse } from "../types";
-import { systemWalletService, transactionsService } from "../services/api";
+import { SystemWallet } from "../types";
+import { systemWalletService } from "../services/api";
+
+// Type for system wallet transaction (different from regular Transaction)
+interface SystemWalletTransaction {
+  id: string;
+  amount: number;
+  balanceAfter: number;
+  createdAt: string;
+  description: string;
+  type: string;
+  updatedAt: string;
+  appointmentId?: string;
+  appointment?: {
+    id: string;
+    appointmentType?: string;
+    scheduledDate?: string;
+    location?: string;
+    status?: string;
+    type?: string;
+  };
+  buyer?: {
+    id: string;
+    fullName?: string;
+    email?: string;
+    phone?: string;
+    avatar?: string;
+  };
+  listing?: {
+    id: string;
+    make?: string;
+    model?: string;
+    year?: number;
+    type?: string;
+    condition?: string;
+  } | null;
+}
 
 export default function Fees() {
   const [systemWallet, setSystemWallet] = useState<SystemWallet | null>(null);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [transactions, setTransactions] = useState<SystemWalletTransaction[]>(
+    []
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -37,7 +74,7 @@ export default function Fees() {
             setTransactions(response.data);
           } else {
             const filtered = response.data.filter(
-              (t) => t.status === statusFilter
+              (t: SystemWalletTransaction) => t.type === statusFilter
             );
             setTransactions(filtered);
           }
@@ -53,6 +90,9 @@ export default function Fees() {
     },
     [statusFilter]
   );
+  useEffect(() => {
+    console.log(transactions);
+  }, [transactions]);
 
   useEffect(() => {
     fetchTransactions(currentPage);
@@ -224,56 +264,97 @@ export default function Fees() {
                         </td>
                       </tr>
                     ) : (
-                      transactions.map((transaction) => (
-                        <tr
-                          key={transaction.id}
-                          className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
-                        >
-                          <td className="py-4 px-4 text-gray-600 text-sm">
-                            {formatDate(
-                              transaction.dates?.createdAt ||
-                                transaction.dates?.completedAt ||
-                                new Date().toISOString()
-                            )}
-                          </td>
-                          <td className="py-4 px-4">
-                            <div className="text-gray-900 font-medium">
-                              {transaction.listing?.make &&
-                              transaction.listing?.model
-                                ? `${transaction.listing.make} ${transaction.listing.model}`
-                                : transaction.listing?.title || "N/A"}
-                            </div>
-                            {transaction.listing?.year && (
-                              <div className="text-sm text-gray-500">
-                                Năm: {transaction.listing.year}
-                              </div>
-                            )}
-                          </td>
-                          <td className="py-4 px-4">
-                            <div className="text-gray-900 font-medium">
-                              {transaction.counterparty?.name || "N/A"}
-                            </div>
-                            <div className="text-sm text-gray-500">
-                              {transaction.counterparty?.email || ""}
-                            </div>
-                          </td>
-                          <td className="py-4 px-4">
-                            <div className="text-gray-900 font-medium">
-                              {formatPrice(transaction.amount?.total || 0)}
-                            </div>
-                            {transaction.amount?.deposit &&
-                              transaction.amount.deposit > 0 && (
-                                <div className="text-sm text-gray-500">
-                                  Đặt cọc:{" "}
-                                  {formatPrice(transaction.amount.deposit)}
+                      transactions.map(
+                        (transaction: SystemWalletTransaction) => {
+                          // Get product info from listing
+                          const productInfo = transaction.listing
+                            ? transaction.listing.make &&
+                              transaction.listing.model
+                              ? `${transaction.listing.make} ${transaction.listing.model}`
+                              : transaction.listing.type || "N/A"
+                            : transaction.appointment
+                            ? `Appointment ${
+                                transaction.appointment.type || "N/A"
+                              }`
+                            : "N/A";
+
+                          // Get buyer info
+                          const buyerName =
+                            transaction.buyer?.fullName || "N/A";
+                          const buyerEmail = transaction.buyer?.email || "";
+                          const buyerPhone = transaction.buyer?.phone || "";
+
+                          return (
+                            <tr
+                              key={transaction.id}
+                              className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
+                            >
+                              <td className="py-4 px-4 text-gray-600 text-sm">
+                                {formatDate(
+                                  transaction.createdAt ||
+                                    transaction.updatedAt ||
+                                    new Date().toISOString()
+                                )}
+                              </td>
+                              <td className="py-4 px-4">
+                                <div className="text-gray-900 font-medium">
+                                  {productInfo}
                                 </div>
-                              )}
-                          </td>
-                          <td className="py-4 px-4">
-                            {getStatusBadge(transaction.status)}
-                          </td>
-                        </tr>
-                      ))
+                                {transaction.listing && (
+                                  <>
+                                    {transaction.listing.year && (
+                                      <div className="text-sm text-gray-500">
+                                        Năm: {transaction.listing.year}
+                                      </div>
+                                    )}
+                                    {transaction.listing.condition && (
+                                      <div className="text-sm text-gray-500">
+                                        Tình trạng:{" "}
+                                        {transaction.listing.condition}
+                                      </div>
+                                    )}
+                                  </>
+                                )}
+                                {transaction.appointment && (
+                                  <div className="text-sm text-gray-500">
+                                    {transaction.appointment.appointmentType ||
+                                      transaction.appointment.type}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="py-4 px-4">
+                                <div className="text-gray-900 font-medium">
+                                  {buyerName}
+                                </div>
+                                {buyerEmail && (
+                                  <div className="text-sm text-gray-500">
+                                    {buyerEmail}
+                                  </div>
+                                )}
+                                {buyerPhone && (
+                                  <div className="text-sm text-gray-500">
+                                    {buyerPhone}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="py-4 px-4">
+                                <div className="text-gray-900 font-medium">
+                                  {formatPrice(transaction.amount)}
+                                </div>
+                                {transaction.balanceAfter && (
+                                  <div className="text-sm text-gray-500">
+                                    Số dư sau:{" "}
+                                    {formatPrice(transaction.balanceAfter)}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="py-4 px-4">
+                                {getStatusBadge(transaction.type || "PENDING")}
+                              </td>
+                            </tr>
+                          );
+                        }
+                      )
                     )}
                   </tbody>
                 </table>

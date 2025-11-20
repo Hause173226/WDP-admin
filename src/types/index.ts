@@ -225,3 +225,31 @@ export interface SystemWalletChartResponse {
   success: boolean;
   data: SystemWalletChartData[];
 }
+
+// Revenue Chart Types
+export interface RevenueChartDataset {
+  label: string;
+  data: number[];
+  backgroundColor: string;
+  borderColor: string;
+  borderWidth: number;
+}
+
+export interface RevenueChartSummary {
+  totalTransactionRevenue: number;
+  totalMembershipRevenue: number;
+  totalRevenue: number;
+  totalTransactions: number;
+  totalMemberships: number;
+}
+
+export interface RevenueChartData {
+  labels: string[];
+  datasets: RevenueChartDataset[];
+  summary: RevenueChartSummary;
+}
+
+export interface RevenueChartResponse {
+  success: boolean;
+  data: RevenueChartData;
+}
