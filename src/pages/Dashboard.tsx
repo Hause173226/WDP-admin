@@ -106,14 +106,55 @@ export default function Dashboard() {
   const fetchSystemWalletTransactions = async () => {
     try {
       // Fetch all system wallet transactions for chart
-      // Use a large limit to get all transactions
-      const response = await systemWalletService.getSystemWalletTransactions(
-        1,
-        1000
-      );
-      if (response.success && response.data) {
-        setSystemWalletTransactions(response.data);
+      // Fetch multiple pages if needed
+      let allTransactions: Transaction[] = [];
+      let page = 1;
+      let hasMore = true;
+      const limit = 100;
+
+      while (hasMore) {
+        const response = await systemWalletService.getSystemWalletTransactions(
+          page,
+          limit
+        );
+        console.log(`Fetching page ${page}, response:`, response);
+
+        let transactions: Transaction[] = [];
+
+        if (response.success && response.data) {
+          if (Array.isArray(response.data)) {
+            transactions = response.data;
+          } else if (response.data.transactions) {
+            transactions = response.data.transactions;
+          } else if (response.data.data) {
+            transactions = response.data.data;
+          }
+        } else if (Array.isArray(response)) {
+          transactions = response;
+        } else if (response.data && Array.isArray(response.data)) {
+          transactions = response.data;
+        }
+
+        allTransactions = [...allTransactions, ...transactions];
+
+        // Check if there are more pages
+        if (response.pagination) {
+          hasMore = page < response.pagination.pages;
+          page++;
+        } else if (transactions.length < limit) {
+          hasMore = false;
+        } else {
+          page++;
+          // Safety limit to prevent infinite loop
+          if (page > 100) {
+            hasMore = false;
+          }
+        }
       }
+
+      console.log("Total transactions fetched:", allTransactions.length);
+      console.log("Sample transactions:", allTransactions.slice(0, 3));
+      setSystemWalletTransactions(allTransactions);
     } catch (err) {
       console.error("Error fetching system wallet transactions:", err);
     }
@@ -202,14 +243,48 @@ export default function Dashboard() {
     }
 
     // Calculate revenue from system wallet transactions
-    systemWalletTransactions.forEach((transaction) => {
+    console.log(
+      "Calculating revenue from",
+      systemWalletTransactions.length,
+      "transactions"
+    );
+    console.log(
+      "Time filter:",
+      timeFilter,
+      "Start date:",
+      startDate,
+      "Now:",
+      now
+    );
+
+    systemWalletTransactions.forEach((transaction, index) => {
       const transactionDate = new Date(
         transaction.dates?.completedAt ||
           transaction.dates?.createdAt ||
           new Date()
       );
 
-      if (transactionDate >= startDate && transactionDate <= now) {
+      // Normalize dates to start of day for comparison (remove time component)
+      const normalizedTransactionDate = new Date(
+        transactionDate.getFullYear(),
+        transactionDate.getMonth(),
+        transactionDate.getDate()
+      );
+      const normalizedStartDate = new Date(
+        startDate.getFullYear(),
+        startDate.getMonth(),
+        startDate.getDate()
+      );
+      const normalizedNow = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate()
+      );
+
+      if (
+        normalizedTransactionDate >= normalizedStartDate &&
+        normalizedTransactionDate <= normalizedNow
+      ) {
         let key: string;
         if (timeFilter === "year") {
           key = periodLabel(
@@ -224,10 +299,23 @@ export default function Dashboard() {
         }
 
         const currentRevenue = revenueMap.get(key) || 0;
+        const transactionAmount = transaction.amount?.total || 0;
         // Use amount.total from system wallet transaction
-        revenueMap.set(key, currentRevenue + (transaction.amount?.total || 0));
+        revenueMap.set(key, currentRevenue + transactionAmount);
+
+        if (index < 5) {
+          console.log(
+            `Transaction ${index}: date=${transactionDate.toISOString()}, amount=${transactionAmount}, key=${key}`
+          );
+        }
+      } else if (index < 5) {
+        console.log(
+          `Transaction ${index} filtered out: date=${transactionDate.toISOString()}, start=${normalizedStartDate.toISOString()}, end=${normalizedNow.toISOString()}`
+        );
       }
     });
+
+    console.log("Revenue map:", Array.from(revenueMap.entries()));
 
     // Convert map to array and sort by date
     return Array.from(revenueMap.entries())
