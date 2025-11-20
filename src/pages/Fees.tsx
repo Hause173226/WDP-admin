@@ -230,16 +230,20 @@ export default function Fees() {
                           className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
                         >
                           <td className="py-4 px-4 text-gray-600 text-sm">
-                            {formatDate(transaction.dates.createdAt)}
+                            {formatDate(
+                              transaction.dates?.createdAt ||
+                                transaction.dates?.completedAt ||
+                                new Date().toISOString()
+                            )}
                           </td>
                           <td className="py-4 px-4">
                             <div className="text-gray-900 font-medium">
-                              {transaction.listing.make &&
-                              transaction.listing.model
+                              {transaction.listing?.make &&
+                              transaction.listing?.model
                                 ? `${transaction.listing.make} ${transaction.listing.model}`
-                                : transaction.listing.title || "N/A"}
+                                : transaction.listing?.title || "N/A"}
                             </div>
-                            {transaction.listing.year && (
+                            {transaction.listing?.year && (
                               <div className="text-sm text-gray-500">
                                 Năm: {transaction.listing.year}
                               </div>
@@ -247,22 +251,23 @@ export default function Fees() {
                           </td>
                           <td className="py-4 px-4">
                             <div className="text-gray-900 font-medium">
-                              {transaction.counterparty.name}
+                              {transaction.counterparty?.name || "N/A"}
                             </div>
                             <div className="text-sm text-gray-500">
-                              {transaction.counterparty.email}
+                              {transaction.counterparty?.email || ""}
                             </div>
                           </td>
                           <td className="py-4 px-4">
                             <div className="text-gray-900 font-medium">
-                              {formatPrice(transaction.amount.total)}
+                              {formatPrice(transaction.amount?.total || 0)}
                             </div>
-                            {transaction.amount.deposit > 0 && (
-                              <div className="text-sm text-gray-500">
-                                Đặt cọc:{" "}
-                                {formatPrice(transaction.amount.deposit)}
-                              </div>
-                            )}
+                            {transaction.amount?.deposit &&
+                              transaction.amount.deposit > 0 && (
+                                <div className="text-sm text-gray-500">
+                                  Đặt cọc:{" "}
+                                  {formatPrice(transaction.amount.deposit)}
+                                </div>
+                              )}
                           </td>
                           <td className="py-4 px-4">
                             {getStatusBadge(transaction.status)}
